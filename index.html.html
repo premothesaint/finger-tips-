@@ -5,7 +5,10 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
     <title>AR Block Builder</title>
     <style>
-        :root { --neon-green: #00ff41; }
+        :root {
+            --neon-green: #00ff41;
+            --neon-green-dim: rgba(0, 255, 65, 0.3);
+        }
 
         * {
             margin: 0;
@@ -42,11 +45,18 @@
             text-shadow: 0 0 10px rgba(0, 255, 65, 0.5);
         }
 
-        .scanning-text { animation: scanPulse 2s infinite; }
+        .scanning-text {
+            animation: scanPulse 2s infinite;
+        }
 
         @keyframes scanPulse {
-            0%, 100% { opacity: 0.4; }
-            50% { opacity: 1; }
+            0%,
+            100% {
+                opacity: 0.4;
+            }
+            50% {
+                opacity: 1;
+            }
         }
 
         #start-overlay {
@@ -68,7 +78,7 @@
             text-align: center;
             color: var(--neon-green);
             background: rgba(0, 0, 0, 0.95);
-            max-width: 340px;
+            max-width: 360px;
             box-shadow: 0 0 30px rgba(0, 255, 65, 0.15);
         }
 
@@ -124,18 +134,224 @@
             text-align: center;
             pointer-events: none;
         }
+
+        /* Finger scanning overlay */
+        #scan-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: #000;
+            z-index: 200;
+            display: none;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+        }
+
+        #scan-overlay.active {
+            display: flex;
+        }
+
+        #scan-container {
+            position: relative;
+            width: 280px;
+            height: 280px;
+            border: 2px solid var(--neon-green);
+            box-shadow: 0 0 40px rgba(0, 255, 65, 0.2), inset 0 0 40px rgba(0, 255, 65, 0.05);
+            overflow: hidden;
+        }
+
+        #scan-video {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+        }
+
+        #scan-canvas {
+            display: none;
+        }
+
+        /* Scanning guide box */
+        .scan-guide {
+            position: absolute;
+            border: 2px dashed var(--neon-green);
+            box-shadow: 0 0 15px rgba(0, 255, 65, 0.3);
+            pointer-events: none;
+            animation: guidePulse 2s infinite;
+        }
+
+        @keyframes guidePulse {
+            0%,
+            100% {
+                border-color: var(--neon-green);
+                box-shadow: 0 0 15px rgba(0, 255, 65, 0.3);
+            }
+            50% {
+                border-color: rgba(0, 255, 65, 0.4);
+                box-shadow: 0 0 30px rgba(0, 255, 65, 0.6);
+            }
+        }
+
+        /* Scanning corners */
+        .scan-corner {
+            position: absolute;
+            width: 20px;
+            height: 20px;
+            border-color: var(--neon-green);
+            border-style: solid;
+            pointer-events: none;
+        }
+        .scan-corner.tl {
+            top: -1px;
+            left: -1px;
+            border-width: 3px 0 0 3px;
+        }
+        .scan-corner.tr {
+            top: -1px;
+            right: -1px;
+            border-width: 3px 3px 0 0;
+        }
+        .scan-corner.bl {
+            bottom: -1px;
+            left: -1px;
+            border-width: 0 0 3px 3px;
+        }
+        .scan-corner.br {
+            bottom: -1px;
+            right: -1px;
+            border-width: 0 3px 3px 0;
+        }
+
+        /* Scanning text */
+        #scan-instruction {
+            color: var(--neon-green);
+            font-family: 'Courier New', monospace;
+            font-size: 14px;
+            letter-spacing: 3px;
+            margin-top: 24px;
+            text-align: center;
+            text-transform: uppercase;
+        }
+
+        #scan-progress {
+            color: var(--neon-green);
+            font-family: 'Courier New', monospace;
+            font-size: 11px;
+            letter-spacing: 2px;
+            margin-top: 8px;
+            opacity: 0.6;
+        }
+
+        /* Progress dots */
+        #progress-dots {
+            display: flex;
+            gap: 12px;
+            margin-top: 16px;
+        }
+
+        .progress-dot {
+            width: 12px;
+            height: 12px;
+            border: 2px solid var(--neon-green);
+            border-radius: 50%;
+            transition: all 0.3s;
+        }
+
+        .progress-dot.filled {
+            background: var(--neon-green);
+            box-shadow: 0 0 15px var(--neon-green);
+        }
+
+        .progress-dot.current {
+            animation: dotPulse 1s infinite;
+        }
+
+        @keyframes dotPulse {
+            0%,
+            100% {
+                box-shadow: 0 0 5px var(--neon-green);
+            }
+            50% {
+                box-shadow: 0 0 20px var(--neon-green);
+            }
+        }
+
+        /* Scanning line animation */
+        .scan-line {
+            position: absolute;
+            left: 0;
+            width: 100%;
+            height: 2px;
+            background: var(--neon-green);
+            box-shadow: 0 0 8px var(--neon-green);
+            pointer-events: none;
+            animation: scanLine 2s linear infinite;
+        }
+
+        @keyframes scanLine {
+            0% {
+                top: 0;
+            }
+            100% {
+                top: 100%;
+            }
+        }
+
+        #scan-retry {
+            background: transparent;
+            border: 1px solid var(--neon-green);
+            color: var(--neon-green);
+            padding: 10px 28px;
+            font-family: inherit;
+            font-size: 11px;
+            letter-spacing: 3px;
+            cursor: pointer;
+            text-transform: uppercase;
+            margin-top: 20px;
+            transition: all 0.3s;
+            display: none;
+        }
+
+        #scan-retry:active {
+            background: var(--neon-green);
+            color: #000;
+        }
     </style>
 </head>
 <body>
 
+    <!-- Main start overlay -->
     <div id="start-overlay">
         <div id="start-box">
             <h2>AR BLOCK BUILDER</h2>
-            <p>SHOW HANDS TO CAMERA<br>
-               INDEX FINGER + THUMB TO PLACE<br>
-               NEAR FACE TO EXTRUDE</p>
-            <button id="btn-start">ENTER AR</button>
+            <p>FINGER CALIBRATION REQUIRED<br>
+               SCAN THUMB THEN INDEX FINGER<br>
+               PINCH TO PLACE OR EXTRUDE</p>
+            <button id="btn-start">START CALIBRATION</button>
         </div>
+    </div>
+
+    <!-- Finger scanning overlay -->
+    <div id="scan-overlay">
+        <div id="scan-container">
+            <video id="scan-video" autoplay playsinline muted></video>
+            <canvas id="scan-canvas"></canvas>
+            <div class="scan-guide" id="scan-guide"></div>
+            <div class="scan-line"></div>
+            <div class="scan-corner tl"></div>
+            <div class="scan-corner tr"></div>
+            <div class="scan-corner bl"></div>
+            <div class="scan-corner br"></div>
+        </div>
+        <div id="scan-instruction">PLACE THUMB IN BOX</div>
+        <div id="scan-progress">SCAN 1 OF 2</div>
+        <div id="progress-dots">
+            <div class="progress-dot current" id="dot-1"></div>
+            <div class="progress-dot" id="dot-2"></div>
+        </div>
+        <button id="scan-retry">RETRY</button>
     </div>
 
     <div id="status-line" class="scanning-text">READY</div>
@@ -152,10 +368,20 @@
     <script type="module">
         import * as THREE from 'three';
 
+        // ============================================
+        // CONSTANTS
+        // ============================================
         const BLOCK_SIZE = 0.08;
         const PINCH_THRESHOLD = 0.035;
         const STABLE_PINCH_FRAMES = 6;
+        const SCAN_FRAME_SIZE = 280;
+        const SCAN_GUIDE_SIZE = 120;
+        const SCAN_CONFIDENCE_THRESHOLD = 0.7;
+        const SCAN_STABLE_FRAMES = 30;
 
+        // ============================================
+        // STATE
+        // ============================================
         let scene, camera, renderer;
         let xrSession = null;
         let xrReferenceSpace = null;
@@ -163,6 +389,20 @@
         let handVisuals = [];
         let pinchWasDetected = false;
         let stablePinchCount = 0;
+
+        // Finger calibration data
+        let thumbColorProfile = null;
+        let indexColorProfile = null;
+        let calibratedFingers = false;
+
+        // Scanning state
+        let scanStream = null;
+        let scanVideo = null;
+        let scanCanvas = null;
+        let scanCtx = null;
+        let currentScanStep = 0; // 0 = thumb, 1 = index, 2 = done
+        let scanStableCount = 0;
+        let scanAnimationId = null;
 
         // ============================================
         // THREE.JS SETUP
@@ -197,7 +437,7 @@
             const half = BLOCK_SIZE / 2;
 
             const geo = new THREE.BoxGeometry(BLOCK_SIZE, BLOCK_SIZE, BLOCK_SIZE);
-            
+
             const fillMat = new THREE.MeshBasicMaterial({
                 color: 0x00ff41,
                 transparent: true,
@@ -215,10 +455,14 @@
             group.add(new THREE.LineSegments(edgeGeo, edgeMat));
 
             const corners = [
-                [-half, -half, -half], [half, -half, -half],
-                [-half, half, -half], [half, half, -half],
-                [-half, -half, half], [half, -half, half],
-                [-half, half, half], [half, half, half],
+                [-half, -half, -half],
+                [half, -half, -half],
+                [-half, half, -half],
+                [half, half, -half],
+                [-half, -half, half],
+                [half, -half, half],
+                [-half, half, half],
+                [half, half, half],
             ];
             const dotGeo = new THREE.SphereGeometry(0.006, 6, 6);
             const dotMat = new THREE.MeshBasicMaterial({ color: 0x00ff41 });
@@ -295,6 +539,7 @@
 
             block.scale.set(0.01, 0.01, 0.01);
             const start = performance.now();
+
             function anim(time) {
                 const t = Math.min((time - start) / 250, 1);
                 block.scale.setScalar(1 - Math.pow(1 - t, 3));
@@ -314,7 +559,7 @@
         function createHandVisuals() {
             const group = new THREE.Group();
             const joints = [];
-            
+
             const smallGeo = new THREE.SphereGeometry(0.005, 8, 8);
             const smallMat = new THREE.MeshBasicMaterial({
                 color: 0x00ff41,
@@ -329,15 +574,14 @@
                 joints.push(sphere);
             }
 
-            // Extra visible indicators for thumb tip and index tip
             const tipGeo = new THREE.SphereGeometry(0.012, 12, 12);
             const tipMat = new THREE.MeshBasicMaterial({ color: 0x00ff41 });
-            
+
             const thumbIndicator = new THREE.Mesh(tipGeo, tipMat);
             thumbIndicator.visible = false;
             thumbIndicator.name = 'thumbIndicator';
             group.add(thumbIndicator);
-            
+
             const indexIndicator = new THREE.Mesh(tipGeo, tipMat);
             indexIndicator.visible = false;
             indexIndicator.name = 'indexIndicator';
@@ -390,12 +634,9 @@
             return { thumbTip, indexTip };
         }
 
-        // ============================================
-        // GET HAND JOINTS FROM XRFRAME
-        // ============================================
         function getHandJoints(hand, frame, referenceSpace) {
             if (!hand || !frame || !referenceSpace) return null;
-            
+
             const joints = [];
             for (let i = 0; i < 25; i++) {
                 try {
@@ -419,12 +660,275 @@
         }
 
         // ============================================
+        // FINGER SCANNING / CALIBRATION
+        // ============================================
+        async function startScanning() {
+            const overlay = document.getElementById('scan-overlay');
+            const video = document.getElementById('scan-video');
+            const canvas = document.getElementById('scan-canvas');
+            const guide = document.getElementById('scan-guide');
+            const instruction = document.getElementById('scan-instruction');
+            const progress = document.getElementById('scan-progress');
+            const dot1 = document.getElementById('dot-1');
+            const dot2 = document.getElementById('dot-2');
+            const retryBtn = document.getElementById('scan-retry');
+
+            overlay.classList.add('active');
+            currentScanStep = 0;
+            scanStableCount = 0;
+            thumbColorProfile = null;
+            indexColorProfile = null;
+            calibratedFingers = false;
+
+            // Position guide box in center
+            const guideSize = SCAN_GUIDE_SIZE;
+            const guideLeft = (SCAN_FRAME_SIZE - guideSize) / 2;
+            const guideTop = (SCAN_FRAME_SIZE - guideSize) / 2;
+            guide.style.width = guideSize + 'px';
+            guide.style.height = guideSize + 'px';
+            guide.style.left = guideLeft + 'px';
+            guide.style.top = guideTop + 'px';
+
+            // Reset UI
+            instruction.textContent = 'PLACE THUMB IN BOX';
+            progress.textContent = 'SCAN 1 OF 2';
+            dot1.classList.add('current');
+            dot1.classList.remove('filled');
+            dot2.classList.remove('current', 'filled');
+            retryBtn.style.display = 'none';
+
+            // Setup canvas
+            canvas.width = SCAN_FRAME_SIZE;
+            canvas.height = SCAN_FRAME_SIZE;
+            scanCanvas = canvas;
+            scanCtx = canvas.getContext('2d', { willReadFrequently: true });
+
+            // Get camera
+            try {
+                scanStream = await navigator.mediaDevices.getUserMedia({
+                    video: {
+                        facingMode: 'environment',
+                        width: { ideal: 640 },
+                        height: { ideal: 640 },
+                    }
+                });
+                video.srcObject = scanStream;
+                video.playsInline = true;
+                await video.play();
+                scanVideo = video;
+
+                // Start scan loop
+                scanAnimationId = requestAnimationFrame(scanLoop);
+            } catch (e) {
+                instruction.textContent = 'CAMERA ACCESS DENIED';
+                retryBtn.style.display = 'block';
+            }
+        }
+
+        function scanLoop() {
+            if (!scanVideo || !scanCtx || currentScanStep >= 2) {
+                // Scanning complete
+                if (currentScanStep >= 2) {
+                    finishScanning();
+                }
+                return;
+            }
+
+            // Draw video to canvas
+            scanCtx.drawImage(scanVideo, 0, 0, SCAN_FRAME_SIZE, SCAN_FRAME_SIZE);
+
+            // Get guide box region
+            const guideSize = SCAN_GUIDE_SIZE;
+            const guideLeft = (SCAN_FRAME_SIZE - guideSize) / 2;
+            const guideTop = (SCAN_FRAME_SIZE - guideSize) / 2;
+
+            const imageData = scanCtx.getImageData(guideLeft, guideTop, guideSize, guideSize);
+            const colorProfile = extractColorProfile(imageData);
+
+            // Check if a finger is present in the box
+            const hasFinger = detectFingerPresence(imageData);
+
+            const instruction = document.getElementById('scan-instruction');
+            const retryBtn = document.getElementById('scan-retry');
+
+            if (hasFinger) {
+                scanStableCount++;
+
+                // Update instruction with progress
+                const progressPercent = Math.min(100, Math.round((scanStableCount / SCAN_STABLE_FRAMES) * 100));
+                instruction.textContent = `HOLD STEADY... ${progressPercent}%`;
+
+                if (scanStableCount >= SCAN_STABLE_FRAMES) {
+                    // Capture the color profile
+                    if (currentScanStep === 0) {
+                        thumbColorProfile = colorProfile;
+                        currentScanStep = 1;
+                        scanStableCount = 0;
+
+                        // Update UI
+                        instruction.textContent = 'PLACE INDEX FINGER IN BOX';
+                        document.getElementById('scan-progress').textContent = 'SCAN 2 OF 2';
+                        document.getElementById('dot-1').classList.remove('current');
+                        document.getElementById('dot-1').classList.add('filled');
+                        document.getElementById('dot-2').classList.add('current');
+
+                        // Brief pause to let user reposition
+                        setTimeout(() => {
+                            instruction.textContent = 'PLACE INDEX FINGER IN BOX';
+                        }, 500);
+                    } else if (currentScanStep === 1) {
+                        indexColorProfile = colorProfile;
+                        currentScanStep = 2;
+                        calibratedFingers = true;
+
+                        // Update UI
+                        instruction.textContent = 'CALIBRATION COMPLETE';
+                        document.getElementById('scan-progress').textContent = 'READY';
+                        document.getElementById('dot-2').classList.remove('current');
+                        document.getElementById('dot-2').classList.add('filled');
+
+                        // Finish after brief display
+                        setTimeout(() => {
+                            finishScanning();
+                        }, 1000);
+                        return;
+                    }
+                }
+            } else {
+                if (scanStableCount > 0) {
+                    scanStableCount = Math.max(0, scanStableCount - 2);
+                }
+                if (currentScanStep === 0) {
+                    instruction.textContent = 'PLACE THUMB IN BOX';
+                } else {
+                    instruction.textContent = 'PLACE INDEX FINGER IN BOX';
+                }
+            }
+
+            retryBtn.style.display = 'none';
+            scanAnimationId = requestAnimationFrame(scanLoop);
+        }
+
+        function extractColorProfile(imageData) {
+            const pixels = imageData.data;
+            let totalR = 0,
+                totalG = 0,
+                totalB = 0;
+            let count = 0;
+
+            // Sample pixels (every 4th pixel for performance)
+            for (let i = 0; i < pixels.length; i += 16) {
+                totalR += pixels[i];
+                totalG += pixels[i + 1];
+                totalB += pixels[i + 2];
+                count++;
+            }
+
+            if (count === 0) return { r: 0, g: 0, b: 0 };
+
+            return {
+                r: Math.round(totalR / count),
+                g: Math.round(totalG / count),
+                b: Math.round(totalB / count),
+            };
+        }
+
+        function detectFingerPresence(imageData) {
+            const pixels = imageData.data;
+            let skinPixels = 0;
+            let totalPixels = 0;
+
+            // Simple skin detection based on RGB ranges
+            for (let i = 0; i < pixels.length; i += 16) {
+                const r = pixels[i];
+                const g = pixels[i + 1];
+                const b = pixels[i + 2];
+
+                // Broader skin tone detection for various lighting
+                if (r > 60 && g > 30 && b > 15 &&
+                    r > g && r > b &&
+                    Math.abs(r - g) > 10 &&
+                    r - b > 10) {
+                    skinPixels++;
+                }
+                totalPixels++;
+            }
+
+            const skinRatio = skinPixels / totalPixels;
+            return skinRatio > 0.25; // At least 25% skin pixels in the box
+        }
+
+        function finishScanning() {
+            // Stop scan loop
+            if (scanAnimationId) {
+                cancelAnimationFrame(scanAnimationId);
+                scanAnimationId = null;
+            }
+
+            // Stop camera
+            if (scanStream) {
+                scanStream.getTracks().forEach(track => track.stop());
+                scanStream = null;
+            }
+            if (scanVideo) {
+                scanVideo.srcObject = null;
+                scanVideo = null;
+            }
+
+            // Hide scan overlay
+            document.getElementById('scan-overlay').classList.remove('active');
+
+            if (calibratedFingers) {
+                // Proceed to AR
+                document.getElementById('status-line').textContent = 'CALIBRATED - ENTERING AR...';
+                document.getElementById('start-overlay').style.display = 'none';
+                startARSession();
+            } else {
+                // Go back to start
+                document.getElementById('start-overlay').style.display = 'flex';
+                document.getElementById('btn-start').disabled = false;
+                document.getElementById('btn-start').textContent = 'START CALIBRATION';
+                document.getElementById('status-line').textContent = 'CALIBRATION FAILED';
+            }
+        }
+
+        function retryScan() {
+            // Stop current scan
+            if (scanAnimationId) {
+                cancelAnimationFrame(scanAnimationId);
+                scanAnimationId = null;
+            }
+            if (scanStream) {
+                scanStream.getTracks().forEach(track => track.stop());
+                scanStream = null;
+            }
+            if (scanVideo) {
+                scanVideo.srcObject = null;
+                scanVideo = null;
+            }
+
+            // Restart
+            startScanning();
+        }
+
+        // ============================================
+        // MATCH FINGER COLOR (for AR tracking)
+        // ============================================
+        function matchFingerColor(r, g, b, profile) {
+            if (!profile) return false;
+            const dr = r - profile.r;
+            const dg = g - profile.g;
+            const db = b - profile.b;
+            const distance = Math.sqrt(dr * dr + dg * dg + db * db);
+            return distance < 60; // Tolerance for lighting changes
+        }
+
+        // ============================================
         // XR FRAME LOOP
         // ============================================
         function onXRFrame(time, frame) {
             if (!frame || !xrSession || !xrReferenceSpace) return;
 
-            // Ensure hand visuals exist
             while (handVisuals.length < 2) {
                 const vis = createHandVisuals();
                 handVisuals.push(vis);
@@ -435,7 +939,6 @@
             let rightHand = null;
             let leftHand = null;
 
-            // Identify hands from input sources
             for (const source of inputSources) {
                 if (source.hand) {
                     if (source.handedness === 'right') rightHand = source.hand;
@@ -447,9 +950,8 @@
             const secondaryHand = rightHand && leftHand ? leftHand : null;
 
             const debugEl = document.getElementById('debug-info');
-            let debugText = '';
+            let debugText = calibratedFingers ? 'CALIBRATED | ' : '';
 
-            // Process primary hand
             let thumbTip = null;
             let indexTip = null;
 
@@ -458,17 +960,16 @@
                 const result = updateHandVisuals(handVisuals[0], joints);
                 thumbTip = result.thumbTip;
                 indexTip = result.indexTip;
-                
+
                 if (thumbTip && indexTip) {
                     const dist = thumbTip.distanceTo(indexTip);
-                    debugText = `THUMB-INDEX: ${(dist * 100).toFixed(1)}cm`;
+                    debugText += `DIST: ${(dist * 100).toFixed(1)}cm`;
                 }
             } else {
                 updateHandVisuals(handVisuals[0], null);
-                debugText = 'NO HAND DETECTED';
+                debugText += 'NO HAND';
             }
 
-            // Process secondary hand
             if (secondaryHand) {
                 const joints = getHandJoints(secondaryHand, frame, xrReferenceSpace);
                 updateHandVisuals(handVisuals[1], joints);
@@ -478,14 +979,12 @@
 
             debugEl.textContent = debugText;
 
-            // Pinch detection
             let isPinching = false;
             if (thumbTip && indexTip) {
                 const pinchDist = thumbTip.distanceTo(indexTip);
                 isPinching = pinchDist < PINCH_THRESHOLD;
             }
 
-            // Stable pinch debounce
             if (isPinching) {
                 stablePinchCount++;
             } else {
@@ -496,7 +995,6 @@
             const pinchTriggered = stablePinch && !pinchWasDetected;
             pinchWasDetected = stablePinch;
 
-            // Status display
             const statusEl = document.getElementById('status-line');
             if (!primaryHand) {
                 statusEl.textContent = 'SHOW HANDS TO CAMERA';
@@ -509,7 +1007,6 @@
                 statusEl.classList.remove('scanning-text');
             }
 
-            // Handle pinch action
             if (pinchTriggered && indexTip) {
                 const faceResult = findNearestFace(indexTip);
                 if (faceResult.block && faceResult.normal) {
@@ -556,14 +1053,12 @@
                 return false;
             }
 
-            // Check if hand tracking actually activated
             const features = Array.from(xrSession.enabledFeatures || []);
             const hasHands = features.includes('hand-tracking');
-            
+
             if (!hasHands) {
-                console.warn('Hand tracking not enabled. Device may not support it.');
-                document.getElementById('debug-info').textContent = 
-                    'HAND TRACKING UNAVAILABLE ON THIS DEVICE';
+                document.getElementById('debug-info').textContent =
+                    'HAND TRACKING UNAVAILABLE';
             }
 
             xrReferenceSpace = await xrSession.requestReferenceSpace('local');
@@ -573,26 +1068,25 @@
                 xrSession = null;
                 xrReferenceSpace = null;
                 renderer.setAnimationLoop(null);
-                
-                // Clean up scene
+
                 blocks.forEach(b => scene.remove(b));
                 blocks = [];
                 handVisuals.forEach(v => scene.remove(v));
                 handVisuals = [];
-                
+
                 document.getElementById('status-line').textContent = 'SESSION ENDED';
                 document.getElementById('debug-info').textContent = '';
                 document.getElementById('start-overlay').style.display = 'flex';
                 document.getElementById('btn-start').disabled = false;
-                document.getElementById('btn-start').textContent = 'ENTER AR';
+                document.getElementById('btn-start').textContent = 'START CALIBRATION';
+                calibratedFingers = false;
             });
 
             renderer.setAnimationLoop(onXRFrame);
 
-            document.getElementById('start-overlay').style.display = 'none';
             document.getElementById('status-line').textContent = 'SHOW HANDS TO CAMERA';
             document.getElementById('status-line').classList.add('scanning-text');
-            
+
             return true;
         }
 
@@ -602,16 +1096,18 @@
         function init() {
             setupThreeJS();
 
+            // Main start button now triggers calibration first
             document.getElementById('btn-start').addEventListener('click', async () => {
                 const btn = document.getElementById('btn-start');
                 btn.disabled = true;
-                btn.textContent = 'STARTING...';
-                
-                const success = await startARSession();
-                if (!success) {
-                    btn.disabled = false;
-                    btn.textContent = 'ENTER AR';
-                }
+                btn.textContent = 'STARTING CAMERA...';
+                document.getElementById('start-overlay').style.display = 'none';
+                await startScanning();
+            });
+
+            // Retry button
+            document.getElementById('scan-retry').addEventListener('click', () => {
+                retryScan();
             });
 
             window.addEventListener('resize', () => {
@@ -624,6 +1120,11 @@
         }
 
         init();
+        console.log('AR Block Builder with Finger Calibration');
+        console.log('1. Click START CALIBRATION');
+        console.log('2. Place THUMB in the scanning box');
+        console.log('3. Place INDEX FINGER in the scanning box');
+        console.log('4. Enter AR and pinch to place blocks');
     </script>
 </body>
 </html>
