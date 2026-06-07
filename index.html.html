@@ -35,22 +35,18 @@
             width: 100%;
             height: 100%;
             z-index: 1;
+            display: none;
         }
 
         #camera-feed {
-            width: 100%;
-            height: 100%;
-            object-fit: cover;
-            display: block;
-        }
-
-        #overlay-canvas {
             position: absolute;
             top: 0;
             left: 0;
             width: 100%;
             height: 100%;
-            pointer-events: none;
+            object-fit: cover;
+            display: block;
+            z-index: 1;
         }
 
         #three-canvas {
@@ -59,6 +55,17 @@
             left: 0;
             width: 100%;
             height: 100%;
+            z-index: 2;
+            pointer-events: none;
+        }
+
+        #overlay-canvas {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            z-index: 3;
             pointer-events: none;
         }
 
@@ -70,7 +77,7 @@
             width: 100%;
             height: 100%;
             pointer-events: none;
-            z-index: 10;
+            z-index: 4;
         }
 
         #scan-zone {
@@ -83,7 +90,7 @@
             border: 3px dashed var(--neon-green);
             border-radius: 50%;
             box-shadow: 0 0 40px rgba(0, 255, 65, 0.3), inset 0 0 40px rgba(0, 255, 65, 0.08);
-            transition: all 0.3s;
+            transition: all 0.5s;
         }
 
         #scan-zone.scanning {
@@ -99,7 +106,7 @@
 
         #scan-zone.hidden {
             opacity: 0;
-            transform: translate(-50%, -50%) scale(0.5);
+            transform: translate(-50%, -50%) scale(0.3);
         }
 
         @keyframes zonePulse {
@@ -259,6 +266,19 @@
             background: var(--neon-green);
             color: #000;
         }
+
+        #error-msg {
+            position: fixed;
+            bottom: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            color: #ff4444;
+            font-family: 'Courier New', monospace;
+            font-size: 11px;
+            z-index: 200;
+            text-align: center;
+            display: none;
+        }
     </style>
 </head>
 <body>
@@ -272,10 +292,10 @@
         </div>
     </div>
 
-    <div id="main-container" style="display:none;">
+    <div id="main-container">
         <video id="camera-feed" autoplay playsinline muted></video>
-        <canvas id="overlay-canvas"></canvas>
         <canvas id="three-canvas"></canvas>
+        <canvas id="overlay-canvas"></canvas>
         <div id="calibration-ui">
             <div id="finger-indicator">INITIALIZING...</div>
             <div id="block-count-display">BLOCKS: 0</div>
@@ -288,6 +308,8 @@
             </div>
         </div>
     </div>
+
+    <div id="error-msg"></div>
 
     <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils@0.3.1675466862/camera_utils.js">
     </script>
@@ -309,8 +331,8 @@
         // CONSTANTS
         // ============================================
         const BLOCK_SIZE = 0.06;
-        const PINCH_THRESHOLD = 0.04;
-        const STABLE_PINCH_FRAMES = 5;
+        const PINCH_PIXEL_THRESHOLD = 40;
+        const STABLE_PINCH_FRAMES = 6;
         const REQUIRED_STABLE_FRAMES = 35;
 
         // ============================================
@@ -321,7 +343,6 @@
         let pinchWasDetected = false;
         let stablePinchCount = 0;
 
-        // Camera / calibration
         let mainStream = null;
         let mainVideo = null;
         let overlayCanvas = null;
@@ -333,10 +354,15 @@
         let calibrationComplete = false;
         let cameraUtilsInstance = null;
 
-        // Hand data
         let currentThumbTip = null;
         let currentIndexTip = null;
         let currentHandLandmarks = null;
+
+        // Device motion / orientation for AR tracking
+        let deviceOrientation = { alpha: 0, beta: 0, gamma: 0 };
+        let hasOrientation = false;
+        let initialBeta = null;
+        let initialGamma = null;
 
         // ============================================
         // THREE.JS SETUP
@@ -347,9 +373,11 @@
             canvas.height = window.innerHeight;
 
             scene3D = new THREE.Scene();
-            camera3D = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.01, 50);
-            camera3D.position.set(0, 0, 2);
-            camera3D.lookAt(0, 0, 0);
+
+            // Camera set up for AR-like view
+            camera3D = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.01, 100);
+            camera3D.position.set(0, 0, 0);
+            camera3D.lookAt(0, 0, -1);
 
             renderer3D = new THREE.WebGLRenderer({
                 canvas: canvas,
@@ -362,10 +390,14 @@
 
             const ambient = new THREE.AmbientLight(0xffffff, 0.8);
             scene3D.add(ambient);
+
+            const dirLight = new THREE.DirectionalLight(0xffffff, 0.4);
+            dirLight.position.set(1, 1, -1);
+            scene3D.add(dirLight);
         }
 
         // ============================================
-        // WIREFRAME BLOCK
+        // 3D WIREFRAME BLOCK
         // ============================================
         function createBlock(worldPos) {
             const group = new THREE.Group();
@@ -375,7 +407,7 @@
             const fillMat = new THREE.MeshBasicMaterial({
                 color: 0x00ff41,
                 transparent: true,
-                opacity: 0.08,
+                opacity: 0.1,
                 depthWrite: false,
             });
             group.add(new THREE.Mesh(geo, fillMat));
@@ -385,6 +417,7 @@
                 color: 0x00ff41,
                 transparent: true,
                 opacity: 0.9,
+                linewidth: 1,
             });
             group.add(new THREE.LineSegments(edgeGeo, edgeMat));
 
@@ -398,12 +431,35 @@
                 [-half, half, half],
                 [half, half, half],
             ];
-            const dotGeo = new THREE.SphereGeometry(0.005, 6, 6);
+            const dotGeo = new THREE.SphereGeometry(0.005, 8, 8);
             const dotMat = new THREE.MeshBasicMaterial({ color: 0x00ff41 });
             corners.forEach(c => {
                 const dot = new THREE.Mesh(dotGeo, dotMat);
                 dot.position.set(...c);
                 group.add(dot);
+            });
+
+            // Face center indicators
+            const faceDirs = [
+                { pos: [0, half, 0], rot: [0, 0, 0] },
+                { pos: [0, -half, 0], rot: [0, 0, 0] },
+                { pos: [half, 0, 0], rot: [0, 0, Math.PI / 2] },
+                { pos: [-half, 0, 0], rot: [0, 0, Math.PI / 2] },
+                { pos: [0, 0, half], rot: [Math.PI / 2, 0, 0] },
+                { pos: [0, 0, -half], rot: [Math.PI / 2, 0, 0] },
+            ];
+            faceDirs.forEach(f => {
+                const ringGeo = new THREE.RingGeometry(0.015, 0.022, 4);
+                const ringMat = new THREE.MeshBasicMaterial({
+                    color: 0x00ff41,
+                    side: THREE.DoubleSide,
+                    transparent: true,
+                    opacity: 0.5,
+                });
+                const ring = new THREE.Mesh(ringGeo, ringMat);
+                ring.position.set(...f.pos);
+                ring.rotation.set(...f.rot);
+                group.add(ring);
             });
 
             group.position.copy(worldPos);
@@ -414,7 +470,7 @@
         function findNearestFace(point) {
             let bestBlock = null;
             let bestNormal = null;
-            let bestDist = 0.06;
+            let bestDist = 0.07;
             const normals = [
                 new THREE.Vector3(0, 1, 0),
                 new THREE.Vector3(0, -1, 0),
@@ -451,6 +507,19 @@
             const block = createBlock(worldPos);
             scene3D.add(block);
             blocks.push(block);
+
+            // Pop-in animation
+            block.scale.set(0.01, 0.01, 0.01);
+            const start = performance.now();
+
+            function anim(time) {
+                const t = Math.min((time - start) / 300, 1);
+                const eased = 1 - Math.pow(1 - t, 3);
+                block.scale.setScalar(eased);
+                if (t < 1) requestAnimationFrame(anim);
+            }
+            requestAnimationFrame(anim);
+
             updateBlockCount();
         }
 
@@ -460,33 +529,84 @@
             const block = createBlock(newPos);
             scene3D.add(block);
             blocks.push(block);
+
             block.scale.set(0.01, 0.01, 0.01);
             const start = performance.now();
 
             function anim(time) {
-                const t = Math.min((time - start) / 250, 1);
-                block.scale.setScalar(1 - Math.pow(1 - t, 3));
+                const t = Math.min((time - start) / 300, 1);
+                const eased = 1 - Math.pow(1 - t, 3);
+                block.scale.setScalar(eased);
                 if (t < 1) requestAnimationFrame(anim);
             }
             requestAnimationFrame(anim);
+
             updateBlockCount();
         }
 
         function updateBlockCount() {
-            document.getElementById('block-count-display').textContent = `BLOCKS: ${blocks.length}`;
+            const display = document.getElementById('block-count-display');
+            display.textContent = `BLOCKS: ${blocks.length}`;
         }
 
         // ============================================
-        // SCREEN TO WORLD COORDINATES
+        // SCREEN TO WORLD (AR-like projection)
         // ============================================
-        function screenToWorld(screenX, screenY, depthZ = 0.5) {
+        function screenToWorld(screenX, screenY) {
             const ndcX = (screenX / window.innerWidth) * 2 - 1;
             const ndcY = -(screenY / window.innerHeight) * 2 + 1;
-            const vec = new THREE.Vector3(ndcX, ndcY, 0.5);
+
+            const vec = new THREE.Vector3(ndcX, ndcY, -1);
             vec.unproject(camera3D);
             const dir = vec.sub(camera3D.position).normalize();
-            const distance = (depthZ - camera3D.position.z) / dir.z;
+            const distance = 0.4;
             return camera3D.position.clone().add(dir.multiplyScalar(distance));
+        }
+
+        // ============================================
+        // DEVICE ORIENTATION FOR AR CAMERA
+        // ============================================
+        function setupOrientation() {
+            window.addEventListener('deviceorientation', (event) => {
+                if (event.alpha !== null) {
+                    deviceOrientation.alpha = event.alpha;
+                    deviceOrientation.beta = event.beta;
+                    deviceOrientation.gamma = event.gamma;
+
+                    if (initialBeta === null) {
+                        initialBeta = event.beta;
+                        initialGamma = event.gamma;
+                    }
+
+                    hasOrientation = true;
+                }
+            }, true);
+
+            // Request permission for iOS
+            if (typeof DeviceOrientationEvent !== 'undefined' &&
+                typeof DeviceOrientationEvent.requestPermission === 'function') {
+                DeviceOrientationEvent.requestPermission()
+                    .then(state => {
+                        if (state === 'granted') {
+                            console.log('Orientation permission granted');
+                        }
+                    })
+                    .catch(console.error);
+            }
+        }
+
+        function updateCameraFromOrientation() {
+            if (!hasOrientation) return;
+
+            const beta = deviceOrientation.beta - (initialBeta || 0);
+            const gamma = deviceOrientation.gamma - (initialGamma || 0);
+
+            const rotX = THREE.MathUtils.degToRad(beta * 0.5);
+            const rotY = THREE.MathUtils.degToRad(gamma * 0.5);
+
+            camera3D.rotation.x = rotX;
+            camera3D.rotation.y = rotY;
+            camera3D.rotation.z = 0;
         }
 
         // ============================================
@@ -539,7 +659,6 @@
 
             const landmarks = results.multiHandLandmarks[0];
 
-            // Draw connections
             const connections = [
                 [0, 1],
                 [1, 2],
@@ -565,7 +684,7 @@
                 [9, 13],
                 [13, 17],
             ];
-            overlayCtx.strokeStyle = 'rgba(0, 255, 65, 0.35)';
+            overlayCtx.strokeStyle = 'rgba(0, 255, 65, 0.3)';
             overlayCtx.lineWidth = 1;
             connections.forEach(([a, b]) => {
                 const ax = landmarks[a].x * w;
@@ -578,9 +697,8 @@
                 overlayCtx.stroke();
             });
 
-            // Draw all joints
-            overlayCtx.fillStyle = 'rgba(0, 255, 65, 0.5)';
-            landmarks.forEach((lm, i) => {
+            overlayCtx.fillStyle = 'rgba(0, 255, 65, 0.4)';
+            landmarks.forEach((lm) => {
                 const x = lm.x * w;
                 const y = lm.y * h;
                 overlayCtx.beginPath();
@@ -588,7 +706,6 @@
                 overlayCtx.fill();
             });
 
-            // Highlight thumb tip (4) and index tip (8)
             [4, 8].forEach(i => {
                 if (landmarks[i]) {
                     const x = landmarks[i].x * w;
@@ -597,7 +714,7 @@
 
                     overlayCtx.fillStyle = '#00ff41';
                     overlayCtx.beginPath();
-                    overlayCtx.arc(x, y, 10, 0, 2 * Math.PI);
+                    overlayCtx.arc(x, y, 11, 0, 2 * Math.PI);
                     overlayCtx.fill();
                     overlayCtx.strokeStyle = '#00ff41';
                     overlayCtx.lineWidth = 2;
@@ -606,9 +723,9 @@
                     overlayCtx.fillStyle = '#000';
                     overlayCtx.font = 'bold 11px "Courier New", monospace';
                     overlayCtx.textAlign = 'center';
-                    overlayCtx.fillText(label, x, y - 18);
+                    overlayCtx.fillText(label, x, y - 19);
                     overlayCtx.fillStyle = '#00ff41';
-                    overlayCtx.fillText(label, x, y - 17);
+                    overlayCtx.fillText(label, x, y - 18);
                 }
             });
         }
@@ -668,7 +785,6 @@
                         document.getElementById('cal-dot-1').classList.add('done');
                         document.getElementById('cal-dot-2').classList.add('active');
                     } else if (calibrationStep === 1) {
-                        // Complete calibration
                         calibrationComplete = true;
                         calibrationStep = 2;
                         document.getElementById('cal-dot-2').classList.remove('active');
@@ -676,16 +792,12 @@
                         instruction.textContent = 'CALIBRATED';
                         progress.textContent = '';
                         indicator.textContent = 'READY';
-
-                        // Hide scan zone
                         zone.classList.add('hidden');
                         zone.classList.remove('success', 'scanning');
-
-                        // Show block count
                         document.getElementById('block-count-display').classList.add('visible');
 
-                        // Place initial cube at center
-                        const worldPos = screenToWorld(window.innerWidth / 2, window.innerHeight / 2, 0.5);
+                        // Place initial 3D cube in world space
+                        const worldPos = new THREE.Vector3(0, 0, -0.4);
                         placeBlock(worldPos);
                     }
                 }
@@ -699,7 +811,7 @@
         }
 
         // ============================================
-        // PINCH DETECTION (after calibration)
+        // PINCH DETECTION
         // ============================================
         function handlePinchDetection() {
             if (!currentThumbTip || !currentIndexTip) return;
@@ -714,7 +826,7 @@
             const dy = ty - iy;
             const dist = Math.sqrt(dx * dx + dy * dy);
 
-            const isPinching = dist < 35; // pixels
+            const isPinching = dist < PINCH_PIXEL_THRESHOLD;
 
             if (isPinching) {
                 stablePinchCount++;
@@ -727,10 +839,9 @@
             pinchWasDetected = stablePinch;
 
             if (pinchTriggered) {
-                // Use midpoint between thumb and index as placement position
                 const midX = (tx + ix) / 2;
                 const midY = (ty + iy) / 2;
-                const worldPos = screenToWorld(midX, midY, 0.5);
+                const worldPos = screenToWorld(midX, midY);
                 const faceResult = findNearestFace(worldPos);
 
                 if (faceResult.block && faceResult.normal) {
@@ -742,11 +853,12 @@
         }
 
         // ============================================
-        // CAMERA SETUP
+        // CAMERA SETUP - FORCE BACK CAMERA
         // ============================================
         async function startCamera() {
             const video = document.getElementById('camera-feed');
             const canvas = document.getElementById('overlay-canvas');
+            const errorEl = document.getElementById('error-msg');
 
             canvas.width = window.innerWidth;
             canvas.height = window.innerHeight;
@@ -754,52 +866,59 @@
             overlayCtx = canvas.getContext('2d');
 
             try {
+                // Force back camera with exact constraint
                 mainStream = await navigator.mediaDevices.getUserMedia({
                     video: {
-                        facingMode: 'environment',
+                        facingMode: { exact: 'environment' },
                         width: { ideal: 1280 },
                         height: { ideal: 720 },
                     }
                 });
-                video.srcObject = mainStream;
-                video.playsInline = true;
-                await video.play();
-                mainVideo = video;
-
-                document.getElementById('finger-indicator').textContent = 'INITIALIZING...';
-
-                // Initialize MediaPipe
-                if (!handsInstance) {
-                    await initMediaPipeHands();
-                }
-
-                // Start processing
-                cameraUtilsInstance = new Camera(video, {
-                    onFrame: async () => {
-                        if (handsInstance) {
-                            await handsInstance.send({ image: video });
-                        }
-                    },
-                    width: 640,
-                    height: 480,
-                });
-                cameraUtilsInstance.start();
-
             } catch (e) {
-                console.error('Camera error:', e);
-                document.getElementById('finger-indicator').textContent = 'CAMERA ERROR';
+                // Fallback: try without exact
+                try {
+                    mainStream = await navigator.mediaDevices.getUserMedia({
+                        video: {
+                            facingMode: 'environment',
+                            width: { ideal: 1280 },
+                            height: { ideal: 720 },
+                        }
+                    });
+                } catch (e2) {
+                    errorEl.textContent = 'BACK CAMERA UNAVAILABLE: ' + e2.message;
+                    errorEl.style.display = 'block';
+                    return;
+                }
             }
+
+            video.srcObject = mainStream;
+            video.playsInline = true;
+            await video.play();
+            mainVideo = video;
+
+            document.getElementById('finger-indicator').textContent = 'INITIALIZING...';
+
+            if (!handsInstance) {
+                await initMediaPipeHands();
+            }
+
+            cameraUtilsInstance = new Camera(video, {
+                onFrame: async () => {
+                    if (handsInstance) {
+                        await handsInstance.send({ image: video });
+                    }
+                },
+                width: 640,
+                height: 480,
+            });
+            cameraUtilsInstance.start();
         }
 
         // ============================================
         // RENDER LOOP
         // ============================================
         function renderLoop() {
-            if (calibrationComplete && blocks.length > 0) {
-                // Update camera based on device orientation for AR-like feel
-                // Keep blocks visible
-            }
-
+            updateCameraFromOrientation();
             renderer3D.render(scene3D, camera3D);
             requestAnimationFrame(renderLoop);
         }
@@ -811,6 +930,7 @@
             document.getElementById('start-overlay').style.display = 'none';
             document.getElementById('main-container').style.display = 'block';
             setupThreeJS();
+            setupOrientation();
             startCamera();
             requestAnimationFrame(renderLoop);
         }
