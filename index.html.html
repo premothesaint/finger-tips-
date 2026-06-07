@@ -7,7 +7,6 @@
     <style>
         :root {
             --neon-green: #00ff41;
-            --dark-bg: #000000;
         }
 
         * {
@@ -17,8 +16,8 @@
         }
 
         body {
-            background: var(--dark-bg);
-            font-family: 'Courier New', 'Fira Code', monospace;
+            background: #000;
+            font-family: 'Courier New', monospace;
             overflow: hidden;
             height: 100vh;
             width: 100vw;
@@ -36,14 +35,23 @@
             transform: translateX(-50%);
             z-index: 10;
             color: var(--neon-green);
-            font-size: 10px;
+            font-size: 11px;
             letter-spacing: 2px;
             text-transform: uppercase;
-            opacity: 0.7;
+            opacity: 0.8;
             text-align: center;
             pointer-events: none;
-            text-shadow: 0 0 8px rgba(0, 255, 65, 0.4);
-            transition: opacity 0.5s;
+            text-shadow: 0 0 10px rgba(0, 255, 65, 0.5);
+            transition: opacity 0.3s;
+        }
+
+        .scanning-text {
+            animation: scanPulse 2s infinite;
+        }
+
+        @keyframes scanPulse {
+            0%, 100% { opacity: 0.4; }
+            50% { opacity: 1; }
         }
 
         #start-overlay {
@@ -64,9 +72,9 @@
             padding: 48px 32px;
             text-align: center;
             color: var(--neon-green);
-            background: rgba(0, 0, 0, 0.9);
+            background: rgba(0, 0, 0, 0.95);
             max-width: 340px;
-            box-shadow: 0 0 30px rgba(0, 255, 65, 0.15), inset 0 0 30px rgba(0, 255, 65, 0.03);
+            box-shadow: 0 0 30px rgba(0, 255, 65, 0.15);
         }
 
         #start-box h2 {
@@ -97,7 +105,6 @@
             transition: all 0.3s;
         }
 
-        #btn-start:hover,
         #btn-start:active {
             background: var(--neon-green);
             color: #000;
@@ -109,13 +116,21 @@
             cursor: not-allowed;
         }
 
-        .scanning-text {
-            animation: scanPulse 1.5s infinite;
-        }
-
-        @keyframes scanPulse {
-            0%, 100% { opacity: 0.5; }
-            50% { opacity: 1; }
+        #error-msg {
+            position: fixed;
+            top: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            z-index: 200;
+            color: #ff4444;
+            font-family: 'Courier New', monospace;
+            font-size: 11px;
+            letter-spacing: 1px;
+            text-align: center;
+            padding: 10px 20px;
+            border: 1px solid #ff4444;
+            background: rgba(0, 0, 0, 0.9);
+            display: none;
         }
     </style>
 </head>
@@ -124,46 +139,58 @@
     <div id="start-overlay">
         <div id="start-box">
             <h2>AR BLOCK BUILDER</h2>
-            <p>SHOW YOUR HANDS TO CAMERA<br>
-               SCANNING INDEX AND THUMB<br>
-               PINCH TO PLACE OR EXTRUDE</p>
+            <p>SHOW HANDS TO CAMERA<br>
+               INDEX + THUMB TO PLACE<br>
+               NEAR FACE TO EXTRUDE</p>
             <button id="btn-start">ENTER AR</button>
         </div>
     </div>
 
-    <div id="status-line">SHOW HANDS TO BEGIN</div>
+    <div id="status-line" class="scanning-text">READY</div>
+    <div id="error-msg"></div>
+
+    <script type="importmap">
+        {
+            "imports": {
+                "three": "https://unpkg.com/three@0.160.0/build/three.module.js"
+            }
+        }
+    </script>
 
     <script type="module">
-        import * as THREE from 'https://unpkg.com/three@0.160.0/build/three.module.js';
+        import * as THREE from 'three';
 
         // ============================================
-        // GLOBAL STATE
+        // CONSTANTS
         // ============================================
-        const BLOCK_SIZE = 0.08; // 8cm blocks in world space
-        const EXTRUDE_DISTANCE = 0.09;
-        const PINCH_THRESHOLD = 0.025;
+        const BLOCK_SIZE = 0.08;
+        const PINCH_THRESHOLD = 0.03;
+        const STABLE_PINCH_FRAMES = 5;
 
+        // ============================================
+        // STATE
+        // ============================================
+        let scene, camera, renderer;
         let xrSession = null;
         let xrReferenceSpace = null;
-        let xrHands = null;
-        let scene, camera, renderer;
         let blocks = [];
-        let handMeshes = [];
+        let handJointGroups = [];
         let pinchWasDetected = false;
-        let stablePinchCounter = 0;
-        const STABLE_PINCH_FRAMES = 8;
+        let stablePinchCount = 0;
+        let primaryHandIndex = -1;
 
         // ============================================
-        // THREE.JS SETUP (Minimal)
+        // THREE.JS SETUP
         // ============================================
         function setupThreeJS() {
             scene = new THREE.Scene();
 
-            camera = new THREE.PerspectiveCamera(70, 1, 0.01, 50);
+            camera = new THREE.PerspectiveCamera(70, window.innerWidth / window.innerHeight, 0.01, 50);
 
             renderer = new THREE.WebGLRenderer({
                 antialias: true,
                 alpha: true,
+                powerPreference: 'high-performance',
             });
             renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
             renderer.setSize(window.innerWidth, window.innerHeight);
@@ -171,8 +198,9 @@
             renderer.setClearColor(0x000000, 0);
             document.body.appendChild(renderer.domElement);
 
-            const ambientLight = new THREE.AmbientLight(0xffffff, 0.5);
-            scene.add(ambientLight);
+            // Ambient light for consistent color
+            const ambient = new THREE.AmbientLight(0xffffff, 0.6);
+            scene.add(ambient);
         }
 
         // ============================================
@@ -182,6 +210,7 @@
             const group = new THREE.Group();
             const half = BLOCK_SIZE / 2;
 
+            // Semi-transparent inner
             const geo = new THREE.BoxGeometry(BLOCK_SIZE, BLOCK_SIZE, BLOCK_SIZE);
             const mat = new THREE.MeshBasicMaterial({
                 color: 0x00ff41,
@@ -189,17 +218,16 @@
                 opacity: 0.06,
                 depthWrite: false,
             });
-            const innerBox = new THREE.Mesh(geo, mat);
-            group.add(innerBox);
+            group.add(new THREE.Mesh(geo, mat));
 
-            const edgesGeo = new THREE.EdgesGeometry(geo);
-            const edgesMat = new THREE.LineBasicMaterial({
+            // Wireframe edges
+            const edges = new THREE.EdgesGeometry(geo);
+            const edgeMat = new THREE.LineBasicMaterial({
                 color: 0x00ff41,
                 transparent: true,
                 opacity: 0.9,
             });
-            const wireframe = new THREE.LineSegments(edgesGeo, edgesMat);
-            group.add(wireframe);
+            group.add(new THREE.LineSegments(edges, edgeMat));
 
             // Corner dots
             const corners = [
@@ -208,9 +236,9 @@
                 [-half, -half, half], [half, -half, half],
                 [-half, half, half], [half, half, half],
             ];
+            const dotGeo = new THREE.SphereGeometry(0.006, 6, 6);
+            const dotMat = new THREE.MeshBasicMaterial({ color: 0x00ff41 });
             corners.forEach(c => {
-                const dotGeo = new THREE.SphereGeometry(0.006, 6, 6);
-                const dotMat = new THREE.MeshBasicMaterial({ color: 0x00ff41 });
                 const dot = new THREE.Mesh(dotGeo, dotMat);
                 dot.position.set(...c);
                 group.add(dot);
@@ -219,7 +247,7 @@
             group.position.copy(position);
             group.userData = {
                 isBlock: true,
-                blockId: crypto.randomUUID(),
+                blockId: crypto.randomUUID ? crypto.randomUUID() : Date.now() + Math.random(),
                 halfSize: half,
             };
 
@@ -227,14 +255,14 @@
         }
 
         // ============================================
-        // FIND NEAREST FACE FOR EXTRUSION
+        // FIND NEAREST FACE
         // ============================================
         function findNearestFace(point) {
             let bestBlock = null;
             let bestNormal = null;
-            let bestDist = 0.06;
+            let bestDist = 0.07;
 
-            const faceNormals = [
+            const normals = [
                 new THREE.Vector3(0, 1, 0),
                 new THREE.Vector3(0, -1, 0),
                 new THREE.Vector3(1, 0, 0),
@@ -247,7 +275,7 @@
                 const half = block.userData.halfSize;
                 const bp = block.position;
 
-                const faceOffsets = [
+                const offsets = [
                     new THREE.Vector3(0, half, 0),
                     new THREE.Vector3(0, -half, 0),
                     new THREE.Vector3(half, 0, 0),
@@ -257,12 +285,12 @@
                 ];
 
                 for (let i = 0; i < 6; i++) {
-                    const faceCenter = bp.clone().add(faceOffsets[i]);
-                    const dist = point.distanceTo(faceCenter);
+                    const fc = bp.clone().add(offsets[i]);
+                    const dist = point.distanceTo(fc);
                     if (dist < bestDist) {
                         bestDist = dist;
                         bestBlock = block;
-                        bestNormal = faceNormals[i];
+                        bestNormal = normals[i];
                     }
                 }
             }
@@ -271,18 +299,16 @@
         }
 
         // ============================================
-        // PLACE BLOCK
+        // PLACE / EXTRUDE
         // ============================================
         function placeBlock(position) {
             const block = createWireframeBlock(position);
             scene.add(block);
             blocks.push(block);
+            updateStatus();
             return block;
         }
 
-        // ============================================
-        // EXTRUDE BLOCK
-        // ============================================
         function extrudeBlock(sourceBlock, normal) {
             const offset = normal.clone().multiplyScalar(BLOCK_SIZE * 1.05);
             const newPos = sourceBlock.position.clone().add(offset);
@@ -290,116 +316,108 @@
             scene.add(block);
             blocks.push(block);
 
-            // Extrude animation
+            // Animate
             block.scale.set(0.01, 0.01, 0.01);
             const startTime = performance.now();
             const duration = 250;
 
-            function animateExtrude(time) {
+            function anim(time) {
                 const elapsed = time - startTime;
-                const progress = Math.min(elapsed / duration, 1.0);
-                const eased = 1 - Math.pow(1 - progress, 3);
-                block.scale.setScalar(eased);
-                if (progress < 1) {
-                    requestAnimationFrame(animateExtrude);
-                }
+                const t = Math.min(elapsed / duration, 1);
+                block.scale.setScalar(1 - Math.pow(1 - t, 3));
+                if (t < 1) requestAnimationFrame(anim);
             }
-            requestAnimationFrame(animateExtrude);
+            requestAnimationFrame(anim);
 
+            updateStatus();
             return block;
         }
 
+        function updateStatus() {
+            document.getElementById('status-line').textContent = `BLOCKS: ${blocks.length}`;
+        }
+
         // ============================================
-        // HAND JOINT MESHES
+        // HAND VISUALS
         // ============================================
-        function createJointMesh() {
-            const geo = new THREE.SphereGeometry(0.006, 8, 8);
+        function createHandJointVisual() {
+            const group = new THREE.Group();
+            const joints = [];
+
+            const geo = new THREE.SphereGeometry(0.005, 8, 8);
             const mat = new THREE.MeshBasicMaterial({
                 color: 0x00ff41,
                 transparent: true,
-                opacity: 0.7,
+                opacity: 0.6,
             });
-            return new THREE.Mesh(geo, mat);
-        }
 
-        function createConnectionLine() {
-            const geo = new THREE.BufferGeometry();
-            const mat = new THREE.LineBasicMaterial({
-                color: 0x00ff41,
-                transparent: true,
-                opacity: 0.4,
-            });
-            return new THREE.Line(geo, mat);
-        }
-
-        function setupHandVisuals() {
-            handMeshes = [];
-            for (let h = 0; h < 2; h++) {
-                const handGroup = new THREE.Group();
-                const joints = [];
-                for (let i = 0; i < 25; i++) {
-                    const joint = createJointMesh();
-                    joint.visible = false;
-                    handGroup.add(joint);
-                    joints.push(joint);
-                }
-                handGroup.userData = { joints };
-                handMeshes.push(handGroup);
-                scene.add(handGroup);
+            // 25 joints per hand
+            for (let i = 0; i < 25; i++) {
+                const sphere = new THREE.Mesh(geo, mat.clone());
+                sphere.visible = false;
+                sphere.scale.setScalar(1.0);
+                group.add(sphere);
+                joints.push(sphere);
             }
+
+            group.userData = { joints };
+            return group;
         }
 
-        function updateHandVisuals(handIndex, joints) {
-            const handGroup = handMeshes[handIndex];
-            const jointMeshes = handGroup.userData.joints;
+        function updateHandVisual(group, handJoints) {
+            const joints = group.userData.joints;
 
-            // Thumb: 1,2,3,4
-            // Index: 5,6,7,8
-            const thumbTip = joints[4];
-            const indexTip = joints[8];
+            if (!handJoints) {
+                joints.forEach(j => j.visible = false);
+                return { thumbTip: null, indexTip: null };
+            }
 
             for (let i = 0; i < joints.length; i++) {
-                if (joints[i]) {
-                    jointMeshes[i].position.copy(joints[i]);
-                    jointMeshes[i].visible = true;
+                if (handJoints[i]) {
+                    joints[i].position.copy(handJoints[i]);
+                    joints[i].visible = true;
+                } else {
+                    joints[i].visible = false;
                 }
             }
 
-            // Highlight index tip and thumb tip
-            if (jointMeshes[4]) {
-                jointMeshes[4].material.opacity = 1.0;
-                jointMeshes[4].scale.setScalar(1.8);
+            // Highlight thumb tip (index 4) and index tip (index 8)
+            const thumbTip = handJoints[4] || null;
+            const indexTip = handJoints[8] || null;
+
+            if (joints[4]) {
+                joints[4].material.opacity = 1.0;
+                joints[4].scale.setScalar(2.0);
             }
-            if (jointMeshes[8]) {
-                jointMeshes[8].material.opacity = 1.0;
-                jointMeshes[8].scale.setScalar(1.8);
+            if (joints[8]) {
+                joints[8].material.opacity = 1.0;
+                joints[8].scale.setScalar(2.0);
             }
 
             return { thumbTip, indexTip };
         }
 
         // ============================================
-        // HAND TRACKING SETUP
+        // GET JOINTS FROM XR HAND
         // ============================================
-        function setupHandTracking() {
-            xrHands = {
-                left: null,
-                right: null,
-            };
-        }
-
-        function getHandJoints(hand) {
+        function getHandJointPositions(hand, referenceSpace) {
             if (!hand) return null;
             const joints = [];
             for (let i = 0; i < 25; i++) {
-                const joint = hand.getJoint(i);
-                if (joint) {
-                    joints.push(new THREE.Vector3(
-                        joint.position.x,
-                        joint.position.y,
-                        joint.position.z
-                    ));
-                } else {
+                try {
+                    const joint = hand.getJoint(i);
+                    if (joint) {
+                        const pose = joint.getPose(referenceSpace);
+                        if (pose && pose.transform) {
+                            const p = pose.transform.position;
+                            joints.push(new THREE.Vector3(p.x, p.y, p.z));
+                        } else {
+                            joints.push(null);
+                        }
+                    } else {
+                        joints.push(null);
+                    }
+                } catch (e) {
                     joints.push(null);
                 }
             }
@@ -407,89 +425,89 @@
         }
 
         // ============================================
-        // MAIN XR LOOP
+        // XR FRAME LOOP
         // ============================================
         function onXRFrame(time, frame) {
-            const session = frame.session;
-            const refSpace = xrReferenceSpace;
+            if (!frame || !xrSession || !xrReferenceSpace) return;
 
-            // Get hand data
-            const inputSources = session.inputSources;
-            let leftHand = null;
-            let rightHand = null;
+            const inputSources = xrSession.inputSources;
+
+            // Find hands
+            let hands = [null, null]; // [right, left]
 
             for (const source of inputSources) {
                 if (source.hand) {
-                    if (source.handedness === 'left') leftHand = source.hand;
-                    if (source.handedness === 'right') rightHand = source.hand;
+                    if (source.handedness === 'right') hands[0] = source.hand;
+                    if (source.handedness === 'left') hands[1] = source.hand;
                 }
             }
 
-            // Process right hand (primary)
-            const primaryHand = rightHand || leftHand;
+            // Prefer right hand as primary, fallback to left
+            const primaryHand = hands[0] || hands[1];
+            const secondaryHand = (hands[0] && hands[1]) ? hands[1] : null;
+            const primaryIdx = hands[0] ? 0 : 1;
+
+            // Update visuals
             let thumbTip = null;
             let indexTip = null;
 
-            if (primaryHand) {
-                const joints = getHandJoints(primaryHand);
-                if (joints) {
-                    const result = updateHandVisuals(0, joints);
-                    thumbTip = result.thumbTip;
-                    indexTip = result.indexTip;
-                }
-            } else {
-                // Hide hand visuals
-                if (handMeshes[0]) {
-                    handMeshes[0].userData.joints.forEach(j => j.visible = false);
-                }
+            // Ensure we have enough hand groups
+            while (handJointGroups.length < 2) {
+                const group = createHandJointVisual();
+                handJointGroups.push(group);
+                scene.add(group);
             }
 
-            // Process second hand
-            const secondaryHand = (rightHand && leftHand) ? leftHand : null;
+            if (primaryHand) {
+                const joints = getHandJointPositions(primaryHand, xrReferenceSpace);
+                const result = updateHandVisual(handJointGroups[0], joints);
+                thumbTip = result.thumbTip;
+                indexTip = result.indexTip;
+            } else {
+                updateHandVisual(handJointGroups[0], null);
+            }
+
             if (secondaryHand) {
-                const joints = getHandJoints(secondaryHand);
-                if (joints) {
-                    updateHandVisuals(1, joints);
-                }
-            } else if (handMeshes[1]) {
-                handMeshes[1].userData.joints.forEach(j => j.visible = false);
+                const joints = getHandJointPositions(secondaryHand, xrReferenceSpace);
+                updateHandVisual(handJointGroups[1], joints);
+            } else if (handJointGroups[1]) {
+                updateHandVisual(handJointGroups[1], null);
             }
 
             // Pinch detection
             let isPinching = false;
             if (thumbTip && indexTip) {
-                const pinchDist = thumbTip.distanceTo(indexTip);
-                isPinching = pinchDist < PINCH_THRESHOLD;
+                const dist = thumbTip.distanceTo(indexTip);
+                isPinching = dist < PINCH_THRESHOLD;
             }
 
-            // Stable pinch debounce
+            // Debounce
             if (isPinching) {
-                stablePinchCounter++;
+                stablePinchCount++;
             } else {
-                stablePinchCounter = 0;
+                stablePinchCount = 0;
             }
 
-            const stablePinch = stablePinchCounter >= STABLE_PINCH_FRAMES;
-            const pinchJustTriggered = stablePinch && !pinchWasDetected;
+            const stablePinch = stablePinchCount >= STABLE_PINCH_FRAMES;
+            const pinchTriggered = stablePinch && !pinchWasDetected;
             pinchWasDetected = stablePinch;
 
-            // Status update
-            const statusLine = document.getElementById('status-line');
+            // Update status
+            const statusEl = document.getElementById('status-line');
             if (!primaryHand) {
-                statusLine.textContent = 'SHOW HANDS TO CAMERA';
-                statusLine.classList.add('scanning-text');
+                statusEl.textContent = 'SHOW HANDS TO CAMERA';
+                statusEl.classList.add('scanning-text');
             } else if (isPinching) {
-                statusLine.textContent = 'PINCH DETECTED';
-                statusLine.classList.remove('scanning-text');
+                statusEl.textContent = 'PINCH DETECTED';
+                statusEl.classList.remove('scanning-text');
             } else {
-                statusLine.textContent = `BLOCKS: ${blocks.length}`;
-                statusLine.classList.remove('scanning-text');
+                statusEl.textContent = `BLOCKS: ${blocks.length}`;
+                statusEl.classList.remove('scanning-text');
             }
 
-            // Handle pinch action
-            if (pinchJustTriggered && indexTip) {
+            // Handle pinch
+            if (pinchTriggered && indexTip) {
                 const faceResult = findNearestFace(indexTip);
-
                 if (faceResult.block && faceResult.normal) {
                     extrudeBlock(faceResult.block, faceResult.normal);
                 } else {
@@ -504,51 +522,82 @@
         // START AR SESSION
         // ============================================
         async function startARSession() {
+            const errorEl = document.getElementById('error-msg');
+            errorEl.style.display = 'none';
+
+            // Check WebXR support
             if (!navigator.xr) {
-                alert('WebXR not supported on this device/browser.');
+                errorEl.textContent = 'WebXR not supported. Use Chrome on Android.';
+                errorEl.style.display = 'block';
                 return;
             }
 
-            const isSupported = await navigator.xr.isSessionSupported('immersive-ar');
-            if (!isSupported) {
-                alert('Immersive AR not supported. Try Chrome on Android with ARCore.');
+            // Check AR support
+            let arSupported = false;
+            try {
+                arSupported = await navigator.xr.isSessionSupported('immersive-ar');
+            } catch (e) {
+                errorEl.textContent = 'Error checking AR support: ' + e.message;
+                errorEl.style.display = 'block';
                 return;
             }
 
-            const session = await navigator.xr.requestSession('immersive-ar', {
-                requiredFeatures: ['hand-tracking'],
-                optionalFeatures: ['local', 'hit-test'],
-            });
+            if (!arSupported) {
+                errorEl.textContent = 'AR not supported on this device.';
+                errorEl.style.display = 'block';
+                return;
+            }
 
-            xrSession = session;
-            xrReferenceSpace = await session.requestReferenceSpace('local');
+            // Check hand tracking support
+            let handTrackingSupported = false;
+            try {
+                handTrackingSupported = await navigator.xr.isSessionSupported('immersive-ar');
+                // We'll request hand-tracking as optional since not all devices support it
+            } catch (e) {
+                // Continue anyway
+            }
 
-            renderer.xr.setReferenceSpaceType('local');
-            await renderer.xr.setSession(session);
+            const sessionInit = {
+                requiredFeatures: ['local'],
+                optionalFeatures: ['hand-tracking', 'hit-test'],
+            };
 
-            // Set up hand tracking
-            setupHandTracking();
-            setupHandVisuals();
+            try {
+                xrSession = await navigator.xr.requestSession('immersive-ar', sessionInit);
+            } catch (e) {
+                errorEl.textContent = 'Failed to start AR: ' + e.message;
+                errorEl.style.display = 'block';
+                return;
+            }
 
-            // Maintain camera aspect ratio
-            session.addEventListener('end', () => {
+            xrReferenceSpace = await xrSession.requestReferenceSpace('local');
+
+            await renderer.xr.setSession(xrSession);
+
+            // Check if hand tracking is actually available
+            const hasHandTracking = xrSession.inputSources && 
+                Array.from(xrSession.inputSources).some(s => s.hand);
+
+            document.getElementById('status-line').textContent = 
+                hasHandTracking ? 'SHOW HANDS' : 'HAND TRACKING NOT AVAILABLE';
+
+            // Session end handler
+            xrSession.addEventListener('end', () => {
                 xrSession = null;
+                xrReferenceSpace = null;
+                renderer.setAnimationLoop(null);
                 document.getElementById('status-line').textContent = 'SESSION ENDED';
                 document.getElementById('start-overlay').style.display = 'flex';
                 document.getElementById('btn-start').disabled = false;
                 document.getElementById('btn-start').textContent = 'ENTER AR';
             });
 
-            // Use the XR frame loop
-            renderer.setAnimationLoop((time, frame) => {
-                if (frame) {
-                    onXRFrame(time, frame);
-                }
-            });
+            // Set animation loop
+            renderer.setAnimationLoop(onXRFrame);
 
             // Hide overlay
             document.getElementById('start-overlay').style.display = 'none';
-            document.getElementById('status-line').textContent = 'SHOW HANDS TO CAMERA';
+            document.getElementById('status-line').classList.add('scanning-text');
         }
 
         // ============================================
@@ -562,19 +611,24 @@
                 btn.disabled = true;
                 btn.textContent = 'STARTING...';
                 await startARSession();
+                if (!xrSession) {
+                    btn.disabled = false;
+                    btn.textContent = 'ENTER AR';
+                }
             });
 
-            // Handle resize - maintain aspect ratio
             window.addEventListener('resize', () => {
-                if (renderer) {
+                if (renderer && !xrSession) {
                     renderer.setSize(window.innerWidth, window.innerHeight);
+                    camera.aspect = window.innerWidth / window.innerHeight;
+                    camera.updateProjectionMatrix();
                 }
             });
         }
 
         init();
-        console.log('AR BLOCK BUILDER - WebXR Hand Tracking');
-        console.log('Show hands to camera. Pinch index+thumb to place or extrude blocks.');
+        console.log('AR Block Builder initialized');
+        console.log('Hand tracking: index + thumb pinch to place/extrude blocks');
     </script>
 </body>
 </html>
