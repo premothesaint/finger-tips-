@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-    <title>AR Wireframe Cube - Fixed</title>
+    <title>AR Wireframe Cube - Working</title>
     <style>
         * {
             margin: 0;
@@ -16,9 +16,6 @@
             overflow: hidden;
             background: #000;
             touch-action: manipulation;
-            -webkit-touch-callout: none;
-            -webkit-user-select: none;
-            user-select: none;
             height: 100vh;
             width: 100vw;
             position: fixed;
@@ -33,6 +30,12 @@
         }
         
         #video {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
             display: none;
         }
         
@@ -51,16 +54,17 @@
             top: 30px;
             left: 50%;
             transform: translateX(-50%);
-            background: rgba(0, 0, 0, 0.8);
+            background: rgba(0, 0, 0, 0.85);
             color: white;
-            padding: 15px 25px;
+            padding: 12px 24px;
             border-radius: 30px;
-            font-size: 16px;
+            font-size: 15px;
             font-weight: bold;
             text-align: center;
             backdrop-filter: blur(10px);
             -webkit-backdrop-filter: blur(10px);
             border: 1px solid rgba(255, 255, 255, 0.2);
+            max-width: 90%;
         }
         
         #controls {
@@ -69,32 +73,35 @@
             left: 50%;
             transform: translateX(-50%);
             display: flex;
-            gap: 15px;
+            gap: 12px;
             pointer-events: auto;
+            flex-wrap: wrap;
+            justify-content: center;
         }
         
         button {
-            background: rgba(0, 0, 0, 0.8);
+            background: rgba(0, 0, 0, 0.85);
             backdrop-filter: blur(10px);
             -webkit-backdrop-filter: blur(10px);
             color: white;
             border: 2px solid rgba(255, 255, 255, 0.3);
-            padding: 15px 30px;
+            padding: 14px 28px;
             border-radius: 50px;
-            font-size: 16px;
+            font-size: 15px;
             font-weight: bold;
             cursor: pointer;
-            transition: all 0.3s;
-            min-width: 120px;
+            transition: all 0.2s;
+            min-width: 110px;
+            backdrop-filter: blur(10px);
         }
         
         button:active {
-            transform: scale(0.95);
+            transform: scale(0.93);
             background: rgba(255, 255, 255, 0.2);
         }
         
         .primary {
-            background: rgba(0, 255, 136, 0.3);
+            background: rgba(0, 255, 136, 0.25);
             border-color: rgba(0, 255, 136, 0.6);
             color: #00ff88;
         }
@@ -112,16 +119,15 @@
             justify-content: center;
             z-index: 1000;
             color: white;
-            transition: opacity 0.5s;
         }
         
         .spinner {
-            width: 50px;
-            height: 50px;
-            border: 3px solid rgba(255, 255, 255, 0.3);
+            width: 40px;
+            height: 40px;
+            border: 3px solid rgba(255, 255, 255, 0.2);
             border-top-color: #00ff88;
             border-radius: 50%;
-            animation: spin 1s linear infinite;
+            animation: spin 0.8s linear infinite;
             margin-bottom: 20px;
         }
         
@@ -130,8 +136,7 @@
         }
         
         .hidden {
-            opacity: 0;
-            pointer-events: none;
+            display: none !important;
         }
     </style>
 </head>
@@ -141,399 +146,410 @@
     
     <div id="loading">
         <div class="spinner"></div>
-        <div id="loadingText">Initializing AR...</div>
+        <div id="loadingText">Starting camera...</div>
     </div>
     
     <div id="ui">
-        <div id="status">📱 Starting up...</div>
+        <div id="status">📱 Initializing...</div>
         <div id="controls">
             <button class="primary" id="placeBtn">📦 Place Cube</button>
             <button id="resetBtn">🔄 Reset</button>
         </div>
     </div>
 
-    <script type="importmap">
-        {
-            "imports": {
-                "three": "https://unpkg.com/three@0.157.0/build/three.module.js",
-                "three/addons/": "https://unpkg.com/three@0.157.0/examples/jsm/"
-            }
-        }
+    <!-- Three.js from CDN -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js">
     </script>
 
-    <script type="module">
-        import * as THREE from 'three';
-
-        // DOM elements
-        const canvas = document.getElementById('canvas');
-        const video = document.getElementById('video');
-        const statusDiv = document.getElementById('status');
-        const placeBtn = document.getElementById('placeBtn');
-        const resetBtn = document.getElementById('resetBtn');
-        const loadingDiv = document.getElementById('loading');
-        const loadingText = document.getElementById('loadingText');
-
-        // State
-        let cubePlaced = false;
-        let isGrabbing = false;
-        let leftHandPos = null;
-        let rightHandPos = null;
-        let leftPinching = false;
-        let rightPinching = false;
-
-        // Three.js setup
-        const renderer = new THREE.WebGLRenderer({ canvas, alpha: true, antialias: true });
-        renderer.setSize(window.innerWidth, window.innerHeight);
-        renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
-
-        const scene = new THREE.Scene();
-        const camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.01, 100);
-        camera.position.set(0, 0, 0);
-
-        // Lighting
-        const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
-        scene.add(ambientLight);
-
-        // Create wireframe cube with diffraction effect
-        const cubeSize = 0.15;
-        const cubeGroup = new THREE.Group();
-        
-        // Multiple colored wireframes
-        const colors = [
-            { color: 0xff0000, offset: [0.003, 0, 0] },
-            { color: 0x00ff00, offset: [-0.003, 0, 0] },
-            { color: 0x0000ff, offset: [0, 0.003, 0] },
-            { color: 0xff00ff, offset: [0, -0.003, 0] },
-            { color: 0x00ffff, offset: [0, 0, 0.003] },
-            { color: 0xffff00, offset: [0, 0, -0.003] }
-        ];
-        
-        const wireframes = [];
-        colors.forEach(({ color, offset }) => {
-            const geometry = new THREE.BoxGeometry(cubeSize, cubeSize, cubeSize);
-            const edges = new THREE.EdgesGeometry(geometry);
-            const wireframe = new THREE.LineSegments(
-                edges,
-                new THREE.LineBasicMaterial({ 
-                    color: color,
-                    transparent: true,
-                    opacity: 0.8
-                })
-            );
-            wireframe.position.set(...offset);
-            cubeGroup.add(wireframe);
-            wireframes.push(wireframe);
+    <script>
+        // Wait for Three.js to load
+        window.addEventListener('load', function() {
+            if (typeof THREE === 'undefined') {
+                document.getElementById('loadingText').textContent = 'Failed to load 3D engine. Please check your internet connection.';
+                return;
+            }
+            startApp();
         });
 
-        // Corner dots
-        const dotGeometry = new THREE.SphereGeometry(0.006, 8, 8);
-        const dotMaterial = new THREE.MeshBasicMaterial({ color: 0xffffff });
-        for (let x = -0.5; x <= 0.5; x++) {
-            for (let y = -0.5; y <= 0.5; y++) {
-                for (let z = -0.5; z <= 0.5; z++) {
-                    const dot = new THREE.Mesh(dotGeometry, dotMaterial);
-                    dot.position.set(x * cubeSize, y * cubeSize, z * cubeSize);
-                    cubeGroup.add(dot);
-                }
+        // Fallback: if Three.js doesn't load in 5 seconds
+        setTimeout(function() {
+            if (typeof THREE === 'undefined') {
+                document.getElementById('loadingText').textContent = 'Loading took too long. Please refresh.';
             }
-        }
+        }, 5000);
 
-        cubeGroup.visible = false;
-        scene.add(cubeGroup);
+        function startApp() {
+            const canvas = document.getElementById('canvas');
+            const video = document.getElementById('video');
+            const statusDiv = document.getElementById('status');
+            const placeBtn = document.getElementById('placeBtn');
+            const resetBtn = document.getElementById('resetBtn');
+            const loadingDiv = document.getElementById('loading');
+            const loadingText = document.getElementById('loadingText');
 
-        // Create hand wireframe groups
-        const leftHandGroup = new THREE.Group();
-        const rightHandGroup = new THREE.Group();
-        scene.add(leftHandGroup);
-        scene.add(rightHandGroup);
+            // State
+            let cubePlaced = false;
+            let isGrabbing = false;
+            let leftHandPos = null;
+            let rightHandPos = null;
+            let leftPinching = false;
+            let rightPinching = false;
+            let cameraReady = false;
 
-        // Initialize MediaPipe with timeout
-        async function initializeMediaPipe() {
-            try {
-                loadingText.textContent = 'Loading hand tracking...';
-                
-                // Load MediaPipe with a timeout
-                const handsPromise = import('https://cdn.jsdelivr.net/npm/@mediapipe/hands@0.4.1675469240/hands.js');
-                const cameraPromise = import('https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils@0.3.1675466862/camera_utils.js');
-                
-                const timeout = new Promise((_, reject) => 
-                    setTimeout(() => reject(new Error('Loading timeout')), 10000)
-                );
-                
-                const [handsModule, cameraModule] = await Promise.race([
-                    Promise.all([handsPromise, cameraPromise]),
-                    timeout
-                ]);
-                
-                const { Hands } = handsModule;
-                const { Camera } = cameraModule;
+            // Three.js setup
+            const renderer = new THREE.WebGLRenderer({ canvas, alpha: true });
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
 
-                const hands = new Hands({
-                    locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/hands@0.4.1675469240/${file}`
-                });
+            const scene = new THREE.Scene();
+            const camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.01, 100);
+            camera.position.set(0, 0, 0);
 
-                hands.setOptions({
-                    maxNumHands: 2,
-                    modelComplexity: 1,
-                    minDetectionConfidence: 0.7,
-                    minTrackingConfidence: 0.5
-                });
-
-                hands.onResults((results) => {
-                    // Clear previous hand visuals
-                    leftHandGroup.clear();
-                    rightHandGroup.clear();
-                    
-                    if (results.multiHandLandmarks && results.multiHandLandmarks.length > 0) {
-                        statusDiv.textContent = '🖐️ Hands detected!';
-                        statusDiv.style.color = '#00ff88';
-                        
-                        results.multiHandLandmarks.forEach((landmarks, index) => {
-                            const handedness = results.multiHandedness[index].label;
-                            const group = handedness === 'Left' ? leftHandGroup : rightHandGroup;
-                            
-                            // Draw hand wireframe
-                            drawHandWireframe(landmarks, group, handedness);
-                            
-                            // Calculate pinch
-                            const thumb = landmarks[4];
-                            const index = landmarks[8];
-                            const distance = Math.sqrt(
-                                Math.pow(thumb.x - index.x, 2) +
-                                Math.pow(thumb.y - index.y, 2) +
-                                Math.pow(thumb.z - index.z, 2)
-                            );
-                            const pinching = distance < 0.05;
-                            
-                            // Get hand position
-                            const handPos = new THREE.Vector3(
-                                (landmarks[9].x - 0.5) * 2,
-                                -(landmarks[9].y - 0.5) * 2,
-                                -(landmarks[9].z * 2 + 0.5)
-                            );
-                            
-                            if (handedness === 'Left') {
-                                leftHandPos = handPos;
-                                leftPinching = pinching;
-                            } else {
-                                rightHandPos = handPos;
-                                rightPinching = pinching;
-                            }
-                        });
-                        
-                        // Handle cube grabbing
-                        if (cubePlaced && leftHandPos && rightHandPos) {
-                            const cubePos = cubeGroup.position.clone();
-                            const leftDist = leftHandPos.distanceTo(cubePos);
-                            const rightDist = rightHandPos.distanceTo(cubePos);
-                            
-                            if (leftDist < 0.25 && rightDist < 0.25 && leftPinching && rightPinching) {
-                                if (!isGrabbing) {
-                                    isGrabbing = true;
-                                    wireframes.forEach(w => w.material.opacity = 1);
-                                    statusDiv.textContent = '✊ Cube grabbed! Lift it!';
-                                    statusDiv.style.color = '#ffff00';
-                                    if (navigator.vibrate) navigator.vibrate(50);
-                                }
-                                
-                                // Move cube to midpoint of hands
-                                const midpoint = new THREE.Vector3()
-                                    .addVectors(leftHandPos, rightHandPos)
-                                    .multiplyScalar(0.5);
-                                cubeGroup.position.lerp(midpoint, 0.3);
-                                
-                                // Rotate based on hand positions
-                                const angle = Math.atan2(
-                                    rightHandPos.y - leftHandPos.y,
-                                    rightHandPos.x - leftHandPos.x
-                                );
-                                cubeGroup.rotation.z += (angle - cubeGroup.rotation.z) * 0.2;
-                            } else if (isGrabbing) {
-                                releaseCube();
-                            }
-                        }
-                    } else {
-                        statusDiv.textContent = cubePlaced ? '🔍 Show hands to grab' : '📱 Ready';
-                        statusDiv.style.color = '#ffffff';
-                        leftHandPos = null;
-                        rightHandPos = null;
-                        if (isGrabbing) releaseCube();
-                    }
-                });
-
-                // Start camera
-                loadingText.textContent = 'Starting back camera...';
-                
-                const stream = await navigator.mediaDevices.getUserMedia({
-                    video: {
-                        facingMode: 'environment',
-                        width: { ideal: 640 },
-                        height: { ideal: 480 }
-                    }
-                });
-                
-                video.srcObject = stream;
-                await video.play();
-                
-                const cameraInstance = new Camera(video, {
-                    onFrame: async () => {
-                        await hands.send({ image: video });
-                    },
-                    width: 640,
-                    height: 480
-                });
-                cameraInstance.start();
-                
-                return true;
-                
-            } catch (error) {
-                console.error('MediaPipe setup failed:', error);
-                return false;
-            }
-        }
-
-        function drawHandWireframe(landmarks, group, handedness) {
-            const connections = [
-                [0, 1], [1, 2], [2, 3], [3, 4],
-                [0, 5], [5, 6], [6, 7], [7, 8],
-                [0, 9], [9, 10], [10, 11], [11, 12],
-                [0, 13], [13, 14], [14, 15], [15, 16],
-                [0, 17], [17, 18], [18, 19], [19, 20],
-                [5, 9], [9, 13], [13, 17]
+            // Create wireframe cube
+            const cubeSize = 0.15;
+            const cubeGroup = new THREE.Group();
+            
+            // Main wireframe layers with different colors
+            const colorSets = [
+                { color: 0xff006e, offset: [0.003, 0, 0] },
+                { color: 0x00f5d4, offset: [-0.003, 0, 0] },
+                { color: 0x3a86ff, offset: [0, 0.003, 0] },
+                { color: 0xffbe0b, offset: [0, -0.003, 0] },
+                { color: 0x8338ec, offset: [0, 0, 0.003] },
+                { color: 0xfb5607, offset: [0, 0, -0.003] }
             ];
             
-            const color = handedness === 'Left' ? 0x00ffff : 0xff00ff;
-            
-            connections.forEach(([start, end]) => {
-                const p1 = landmarks[start];
-                const p2 = landmarks[end];
-                
-                const geometry = new THREE.BufferGeometry();
-                const positions = new Float32Array([
-                    (p1.x - 0.5) * 2, -(p1.y - 0.5) * 2, -p1.z * 2,
-                    (p2.x - 0.5) * 2, -(p2.y - 0.5) * 2, -p2.z * 2
-                ]);
-                geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
-                
-                const line = new THREE.Line(
-                    geometry,
-                    new THREE.LineBasicMaterial({ color, transparent: true, opacity: 0.7 })
+            const wireframes = [];
+            colorSets.forEach(({ color, offset }) => {
+                const geometry = new THREE.BoxGeometry(cubeSize, cubeSize, cubeSize);
+                const edges = new THREE.EdgesGeometry(geometry);
+                const wireframe = new THREE.LineSegments(
+                    edges,
+                    new THREE.LineBasicMaterial({ 
+                        color: color,
+                        transparent: true,
+                        opacity: 0.8
+                    })
                 );
-                group.add(line);
+                wireframe.position.set(offset[0], offset[1], offset[2]);
+                cubeGroup.add(wireframe);
+                wireframes.push(wireframe);
             });
-        }
 
-        function releaseCube() {
-            isGrabbing = false;
-            wireframes.forEach(w => w.material.opacity = 0.8);
-            statusDiv.textContent = '🟦 Cube placed - Pinch to grab';
-            statusDiv.style.color = '#00ff88';
-        }
-
-        // Button handlers
-        placeBtn.addEventListener('click', () => {
-            if (!cubePlaced) {
-                cubeGroup.position.set(0, 0, -0.8);
-                cubeGroup.visible = true;
-                cubePlaced = true;
-                statusDiv.textContent = '🟦 Cube placed! Pinch with both hands';
-                statusDiv.style.color = '#00ff88';
-                if (navigator.vibrate) navigator.vibrate([50, 50, 50]);
-            }
-        });
-
-        resetBtn.addEventListener('click', () => {
-            cubeGroup.position.set(0, 0, -0.8);
-            cubeGroup.visible = false;
-            cubePlaced = false;
-            isGrabbing = false;
-            releaseCube();
-            statusDiv.textContent = '🔄 Reset - Place cube to start';
-            statusDiv.style.color = '#ffffff';
-            if (navigator.vibrate) navigator.vibrate(100);
-        });
-
-        // Handle resize
-        window.addEventListener('resize', () => {
-            camera.aspect = window.innerWidth / window.innerHeight;
-            camera.updateProjectionMatrix();
-            renderer.setSize(window.innerWidth, window.innerHeight);
-        });
-
-        // Keyboard controls for testing
-        window.addEventListener('keydown', (e) => {
-            if (e.key === 'p') placeBtn.click();
-            if (e.key === 'r') resetBtn.click();
-        });
-
-        // Animation loop
-        function animate() {
-            requestAnimationFrame(animate);
-            renderer.render(scene, camera);
-        }
-
-        // Start everything
-        async function start() {
-            animate();
-            
-            const success = await initializeMediaPipe();
-            
-            // Hide loading screen
-            loadingDiv.classList.add('hidden');
-            setTimeout(() => loadingDiv.style.display = 'none', 500);
-            
-            if (success) {
-                statusDiv.textContent = '✅ Ready! Tap "Place Cube" to start';
-                statusDiv.style.color = '#00ff88';
-            } else {
-                statusDiv.textContent = '⚠️ Camera unavailable - Use keyboard (P to place)';
-                statusDiv.style.color = '#ffbe0b';
-                
-                // Fallback: mouse control
-                setupMouseFallback();
-            }
-        }
-
-        function setupMouseFallback() {
-            let mouseDown = false;
-            
-            canvas.addEventListener('mousedown', () => {
-                if (cubePlaced) {
-                    isGrabbing = true;
-                    wireframes.forEach(w => w.material.opacity = 1);
-                    statusDiv.textContent = '🖱️ Mouse grab - Move to lift';
-                    statusDiv.style.color = '#ffff00';
+            // Corner dots
+            const dotGeom = new THREE.SphereGeometry(0.006, 8, 8);
+            const dotMat = new THREE.MeshBasicMaterial({ color: 0xffffff });
+            for (let x = -0.5; x <= 0.5; x++) {
+                for (let y = -0.5; y <= 0.5; y++) {
+                    for (let z = -0.5; z <= 0.5; z++) {
+                        const dot = new THREE.Mesh(dotGeom, dotMat);
+                        dot.position.set(x * cubeSize, y * cubeSize, z * cubeSize);
+                        cubeGroup.add(dot);
+                    }
                 }
-                mouseDown = true;
-            });
-            
-            canvas.addEventListener('mouseup', () => {
+            }
+
+            cubeGroup.visible = false;
+            scene.add(cubeGroup);
+
+            // Hand wireframe groups
+            const leftHandGroup = new THREE.Group();
+            const rightHandGroup = new THREE.Group();
+            scene.add(leftHandGroup);
+            scene.add(rightHandGroup);
+
+            // Release cube function
+            function releaseCube() {
                 isGrabbing = false;
                 wireframes.forEach(w => w.material.opacity = 0.8);
-                if (cubePlaced) {
-                    statusDiv.textContent = '🟦 Cube placed';
-                    statusDiv.style.color = '#00ff88';
-                }
-                mouseDown = false;
-            });
-            
-            canvas.addEventListener('mousemove', (e) => {
-                if (mouseDown && isGrabbing) {
-                    const x = (e.clientX / window.innerWidth) * 2 - 1;
-                    const y = -(e.clientY / window.innerHeight) * 2 + 1;
-                    cubeGroup.position.x = x * 0.5;
-                    cubeGroup.position.y = y * 0.5;
-                }
-            });
-        }
+                statusDiv.textContent = '🟦 Cube placed - Pinch to grab';
+                statusDiv.style.color = '#00ff88';
+            }
 
-        // Start the application
-        start().catch(error => {
-            console.error('Startup error:', error);
-            loadingDiv.classList.add('hidden');
-            statusDiv.textContent = '❌ Error: ' + error.message;
-            statusDiv.style.color = '#ff4444';
-        });
+            // Draw hand wireframe
+            function drawHand(landmarks, group, color) {
+                const connections = [
+                    [0, 1], [1, 2], [2, 3], [3, 4],
+                    [0, 5], [5, 6], [6, 7], [7, 8],
+                    [0, 9], [9, 10], [10, 11], [11, 12],
+                    [0, 13], [13, 14], [14, 15], [15, 16],
+                    [0, 17], [17, 18], [18, 19], [19, 20],
+                    [5, 9], [9, 13], [13, 17]
+                ];
+                
+                connections.forEach(([start, end]) => {
+                    const p1 = landmarks[start];
+                    const p2 = landmarks[end];
+                    
+                    const geom = new THREE.BufferGeometry();
+                    const positions = new Float32Array([
+                        (p1.x - 0.5) * 2, -(p1.y - 0.5) * 2, -p1.z * 2,
+                        (p2.x - 0.5) * 2, -(p2.y - 0.5) * 2, -p2.z * 2
+                    ]);
+                    geom.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+                    
+                    const line = new THREE.Line(
+                        geom,
+                        new THREE.LineBasicMaterial({ color, transparent: true, opacity: 0.7 })
+                    );
+                    group.add(line);
+                });
+            }
+
+            // Initialize camera and hand tracking
+            async function initCamera() {
+                try {
+                    loadingText.textContent = 'Requesting camera permission...';
+                    
+                    // First, try to start the video
+                    const stream = await navigator.mediaDevices.getUserMedia({
+                        video: {
+                            facingMode: 'environment',
+                            width: { ideal: 640 },
+                            height: { ideal: 480 }
+                        }
+                    });
+                    
+                    video.srcObject = stream;
+                    await video.play();
+                    
+                    loadingText.textContent = 'Loading hand tracking model...';
+                    
+                    // Load MediaPipe Hands
+                    const script = document.createElement('script');
+                    script.src = 'https://cdn.jsdelivr.net/npm/@mediapipe/hands@0.4.1675469240/hands.js';
+                    
+                    await new Promise((resolve, reject) => {
+                        script.onload = resolve;
+                        script.onerror = () => reject(new Error('Failed to load hand tracking'));
+                        document.head.appendChild(script);
+                        
+                        // Timeout after 8 seconds
+                        setTimeout(() => reject(new Error('Hand tracking load timeout')), 8000);
+                    });
+                    
+                    const script2 = document.createElement('script');
+                    script2.src = 'https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils@0.3.1675466862/camera_utils.js';
+                    
+                    await new Promise((resolve, reject) => {
+                        script2.onload = resolve;
+                        script2.onerror = () => reject(new Error('Failed to load camera utils'));
+                        document.head.appendChild(script2);
+                        
+                        setTimeout(() => reject(new Error('Camera utils load timeout')), 8000);
+                    });
+                    
+                    const hands = new Hands({
+                        locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/hands@0.4.1675469240/${file}`
+                    });
+
+                    hands.setOptions({
+                        maxNumHands: 2,
+                        modelComplexity: 1,
+                        minDetectionConfidence: 0.7,
+                        minTrackingConfidence: 0.5
+                    });
+
+                    hands.onResults((results) => {
+                        leftHandGroup.clear();
+                        rightHandGroup.clear();
+                        
+                        if (results.multiHandLandmarks && results.multiHandLandmarks.length > 0) {
+                            statusDiv.textContent = '🖐️ Hands detected!';
+                            statusDiv.style.color = '#00ff88';
+                            
+                            results.multiHandLandmarks.forEach((landmarks, index) => {
+                                const handedness = results.multiHandedness[index].label;
+                                const group = handedness === 'Left' ? leftHandGroup : rightHandGroup;
+                                const color = handedness === 'Left' ? 0x00ffff : 0xff00ff;
+                                
+                                drawHand(landmarks, group, color);
+                                
+                                // Pinch detection
+                                const thumb = landmarks[4];
+                                const index = landmarks[8];
+                                const distance = Math.sqrt(
+                                    Math.pow(thumb.x - index.x, 2) +
+                                    Math.pow(thumb.y - index.y, 2) +
+                                    Math.pow(thumb.z - index.z, 2)
+                                );
+                                const pinching = distance < 0.05;
+                                
+                                const handPos = new THREE.Vector3(
+                                    (landmarks[9].x - 0.5) * 2,
+                                    -(landmarks[9].y - 0.5) * 2,
+                                    -(landmarks[9].z * 2 + 0.5)
+                                );
+                                
+                                if (handedness === 'Left') {
+                                    leftHandPos = handPos;
+                                    leftPinching = pinching;
+                                } else {
+                                    rightHandPos = handPos;
+                                    rightPinching = pinching;
+                                }
+                            });
+                            
+                            // Grab logic
+                            if (cubePlaced && leftHandPos && rightHandPos) {
+                                const cubePos = cubeGroup.position.clone();
+                                const leftDist = leftHandPos.distanceTo(cubePos);
+                                const rightDist = rightHandPos.distanceTo(cubePos);
+                                
+                                if (leftDist < 0.25 && rightDist < 0.25 && leftPinching && rightPinching) {
+                                    if (!isGrabbing) {
+                                        isGrabbing = true;
+                                        wireframes.forEach(w => w.material.opacity = 1);
+                                        statusDiv.textContent = '✊ Grabbed! Lift your hands';
+                                        statusDiv.style.color = '#ffff00';
+                                        if (navigator.vibrate) navigator.vibrate(50);
+                                    }
+                                    
+                                    const midpoint = new THREE.Vector3()
+                                        .addVectors(leftHandPos, rightHandPos)
+                                        .multiplyScalar(0.5);
+                                    cubeGroup.position.lerp(midpoint, 0.3);
+                                    
+                                    const angle = Math.atan2(
+                                        rightHandPos.y - leftHandPos.y,
+                                        rightHandPos.x - leftHandPos.x
+                                    );
+                                    cubeGroup.rotation.z += (angle - cubeGroup.rotation.z) * 0.2;
+                                } else if (isGrabbing) {
+                                    releaseCube();
+                                }
+                            }
+                        } else {
+                            statusDiv.textContent = cubePlaced ? '🔍 Show hands to grab' : '📱 Ready - Place cube';
+                            statusDiv.style.color = '#ffffff';
+                            leftHandPos = null;
+                            rightHandPos = null;
+                            if (isGrabbing) releaseCube();
+                        }
+                    });
+
+                    const cameraInstance = new Camera(video, {
+                        onFrame: async () => {
+                            await hands.send({ image: video });
+                        },
+                        width: 640,
+                        height: 480
+                    });
+                    cameraInstance.start();
+                    
+                    cameraReady = true;
+                    return true;
+                    
+                } catch (error) {
+                    console.error('Setup error:', error);
+                    return false;
+                }
+            }
+
+            // Button handlers
+            placeBtn.addEventListener('click', () => {
+                if (!cubePlaced) {
+                    cubeGroup.position.set(0, 0, -0.8);
+                    cubeGroup.visible = true;
+                    cubePlaced = true;
+                    statusDiv.textContent = '🟦 Cube placed! Pinch with both hands';
+                    statusDiv.style.color = '#00ff88';
+                    if (navigator.vibrate) navigator.vibrate([50, 50, 50]);
+                }
+            });
+
+            resetBtn.addEventListener('click', () => {
+                cubeGroup.position.set(0, 0, -0.8);
+                cubeGroup.visible = false;
+                cubePlaced = false;
+                isGrabbing = false;
+                releaseCube();
+                statusDiv.textContent = '🔄 Reset - Place cube to start';
+                statusDiv.style.color = '#ffffff';
+                if (navigator.vibrate) navigator.vibrate(100);
+            });
+
+            // Keyboard controls
+            window.addEventListener('keydown', (e) => {
+                if (e.key === 'p' || e.key === 'P') placeBtn.click();
+                if (e.key === 'r' || e.key === 'R') resetBtn.click();
+            });
+
+            // Handle resize
+            window.addEventListener('resize', () => {
+                camera.aspect = window.innerWidth / window.innerHeight;
+                camera.updateProjectionMatrix();
+                renderer.setSize(window.innerWidth, window.innerHeight);
+            });
+
+            // Animation loop
+            function animate() {
+                requestAnimationFrame(animate);
+                
+                // Rotate wireframes for visual effect
+                if (cubeGroup.visible && !isGrabbing) {
+                    wireframes.forEach((w, i) => {
+                        w.rotation.x += 0.003 * (i + 1) * 0.5;
+                        w.rotation.y += 0.003 * (i + 1) * 0.5;
+                    });
+                }
+                
+                renderer.render(scene, camera);
+            }
+
+            // Start
+            async function start() {
+                animate();
+                
+                const success = await initCamera();
+                
+                loadingDiv.classList.add('hidden');
+                
+                if (success) {
+                    statusDiv.textContent = '✅ Ready! Tap "Place Cube" to begin';
+                    statusDiv.style.color = '#00ff88';
+                } else {
+                    statusDiv.textContent = '⚠️ Camera unavailable - Use mouse';
+                    statusDiv.style.color = '#ffbe0b';
+                    setupMouseFallback();
+                }
+            }
+
+            function setupMouseFallback() {
+                let mouseDown = false;
+                
+                canvas.addEventListener('mousedown', () => {
+                    if (cubePlaced) {
+                        isGrabbing = true;
+                        wireframes.forEach(w => w.material.opacity = 1);
+                        statusDiv.textContent = '🖱️ Grabbed - Move mouse';
+                        statusDiv.style.color = '#ffff00';
+                    }
+                    mouseDown = true;
+                });
+                
+                canvas.addEventListener('mouseup', () => {
+                    isGrabbing = false;
+                    wireframes.forEach(w => w.material.opacity = 0.8);
+                    if (cubePlaced) {
+                        statusDiv.textContent = '🟦 Cube placed';
+                        statusDiv.style.color = '#00ff88';
+                    }
+                    mouseDown = false;
+                });
+                
+                canvas.addEventListener('mousemove', (e) => {
+                    if (mouseDown && isGrabbing) {
+                        const x = (e.clientX / window.innerWidth) * 2 - 1;
+                        const y = -(e.clientY / window.innerHeight) * 2 + 1;
+                        cubeGroup.position.x = x * 0.5;
+                        cubeGroup.position.y = y * 0.5;
+                    }
+                });
+            }
+
+            start();
+        }
     </script>
 </body>
 </html>
