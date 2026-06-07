@@ -2,966 +2,496 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-    <title>AR Block Builder</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AR Wireframe Cube - Lift with Your Hands</title>
     <style>
-        :root {
-            --neon-green: #00ff41;
-        }
-
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-        }
-
         body {
-            background: #000;
-            font-family: 'Courier New', monospace;
+            margin: 0;
             overflow: hidden;
-            height: 100vh;
-            width: 100vw;
-            touch-action: none;
-            -webkit-touch-callout: none;
-            -webkit-user-select: none;
-            user-select: none;
-            position: fixed;
+            font-family: Arial, sans-serif;
         }
-
-        #main-container {
-            position: fixed;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            z-index: 1;
+        #video {
             display: none;
         }
-
-        #camera-feed {
+        #canvas {
             position: absolute;
             top: 0;
             left: 0;
-            width: 100%;
-            height: 100%;
-            object-fit: cover;
-            display: block;
-            z-index: 1;
         }
-
-        #three-canvas {
-            position: absolute;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            z-index: 2;
-            pointer-events: none;
-        }
-
-        #overlay-canvas {
-            position: absolute;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            z-index: 3;
-            pointer-events: none;
-        }
-
-        /* Calibration UI */
-        #calibration-ui {
-            position: absolute;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            pointer-events: none;
-            z-index: 4;
-        }
-
-        #scan-zone {
+        #loading {
             position: absolute;
             top: 50%;
             left: 50%;
             transform: translate(-50%, -50%);
-            width: 180px;
-            height: 180px;
-            border: 3px dashed var(--neon-green);
-            border-radius: 50%;
-            box-shadow: 0 0 40px rgba(0, 255, 65, 0.3), inset 0 0 40px rgba(0, 255, 65, 0.08);
-            transition: all 0.5s;
-        }
-
-        #scan-zone.scanning {
-            animation: zonePulse 1.5s infinite;
-        }
-
-        #scan-zone.success {
-            border-style: solid;
-            border-color: #00ff41;
-            box-shadow: 0 0 60px rgba(0, 255, 65, 0.6), inset 0 0 60px rgba(0, 255, 65, 0.2);
-            animation: successGlow 0.6s infinite;
-        }
-
-        #scan-zone.hidden {
-            opacity: 0;
-            transform: translate(-50%, -50%) scale(0.3);
-        }
-
-        @keyframes zonePulse {
-            0%, 100% { box-shadow: 0 0 30px rgba(0, 255, 65, 0.2), inset 0 0 30px rgba(0, 255, 65, 0.05); }
-            50% { box-shadow: 0 0 55px rgba(0, 255, 65, 0.4), inset 0 0 55px rgba(0, 255, 65, 0.12); }
-        }
-
-        @keyframes successGlow {
-            0%, 100% { box-shadow: 0 0 40px rgba(0, 255, 65, 0.4), inset 0 0 40px rgba(0, 255, 65, 0.1); }
-            50% { box-shadow: 0 0 80px rgba(0, 255, 65, 0.8), inset 0 0 80px rgba(0, 255, 65, 0.3); }
-        }
-
-        #calibration-instruction {
-            position: absolute;
-            bottom: 140px;
-            left: 50%;
-            transform: translateX(-50%);
-            color: var(--neon-green);
-            font-family: 'Courier New', monospace;
-            font-size: 15px;
-            letter-spacing: 4px;
-            text-align: center;
-            text-transform: uppercase;
-            text-shadow: 0 0 20px rgba(0, 255, 65, 0.5);
-            transition: all 0.4s;
-        }
-
-        #calibration-progress {
-            position: absolute;
-            bottom: 110px;
-            left: 50%;
-            transform: translateX(-50%);
-            color: var(--neon-green);
-            font-family: 'Courier New', monospace;
-            font-size: 12px;
-            letter-spacing: 3px;
-            text-align: center;
-            opacity: 0.7;
-            transition: all 0.3s;
-        }
-
-        #calibration-dots {
-            position: absolute;
-            bottom: 80px;
-            left: 50%;
-            transform: translateX(-50%);
-            display: flex;
-            gap: 16px;
-        }
-
-        .cal-dot {
-            width: 14px;
-            height: 14px;
-            border: 2px solid var(--neon-green);
-            border-radius: 50%;
-            transition: all 0.4s;
-        }
-
-        .cal-dot.active {
-            background: var(--neon-green);
-            box-shadow: 0 0 20px var(--neon-green);
-            animation: dotGlow 1s infinite;
-        }
-
-        .cal-dot.done {
-            background: var(--neon-green);
-            box-shadow: 0 0 10px var(--neon-green);
-        }
-
-        @keyframes dotGlow {
-            0%, 100% { box-shadow: 0 0 15px var(--neon-green); }
-            50% { box-shadow: 0 0 30px var(--neon-green); }
-        }
-
-        #finger-indicator {
-            position: absolute;
-            top: 40px;
-            left: 50%;
-            transform: translateX(-50%);
-            color: var(--neon-green);
-            font-family: 'Courier New', monospace;
-            font-size: 10px;
-            letter-spacing: 3px;
-            text-transform: uppercase;
-            opacity: 0.6;
-        }
-
-        #block-count-display {
-            position: absolute;
-            top: 70px;
-            left: 50%;
-            transform: translateX(-50%);
-            color: var(--neon-green);
-            font-family: 'Courier New', monospace;
-            font-size: 13px;
-            letter-spacing: 3px;
-            opacity: 0;
-            transition: opacity 0.5s;
-        }
-
-        #block-count-display.visible {
-            opacity: 0.9;
-        }
-
-        #start-overlay {
-            position: fixed;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            background: #000;
+            color: white;
+            font-size: 24px;
+            background: rgba(0,0,0,0.7);
+            padding: 20px;
+            border-radius: 10px;
             z-index: 100;
-            display: flex;
-            align-items: center;
-            justify-content: center;
         }
-
-        #start-box {
-            border: 2px solid var(--neon-green);
-            padding: 48px 32px;
-            text-align: center;
-            color: var(--neon-green);
-            background: rgba(0, 0, 0, 0.95);
-            max-width: 360px;
-            box-shadow: 0 0 30px rgba(0, 255, 65, 0.15);
-        }
-
-        #start-box h2 {
-            font-size: 16px;
-            letter-spacing: 5px;
-            margin-bottom: 20px;
-            font-weight: normal;
-        }
-
-        #start-box p {
-            font-size: 11px;
-            opacity: 0.6;
-            margin-bottom: 28px;
-            line-height: 1.7;
-            letter-spacing: 1px;
-        }
-
-        #btn-start {
-            background: transparent;
-            border: 2px solid var(--neon-green);
-            color: var(--neon-green);
-            padding: 14px 40px;
-            font-family: inherit;
-            font-size: 13px;
-            letter-spacing: 4px;
-            cursor: pointer;
-            text-transform: uppercase;
-            transition: all 0.3s;
-        }
-
-        #btn-start:active {
-            background: var(--neon-green);
-            color: #000;
-        }
-
-        #error-msg {
-            position: fixed;
+        #instructions {
+            position: absolute;
             bottom: 20px;
             left: 50%;
             transform: translateX(-50%);
-            color: #ff4444;
-            font-family: 'Courier New', monospace;
-            font-size: 11px;
-            z-index: 200;
+            color: white;
+            background: rgba(0,0,0,0.7);
+            padding: 15px 25px;
+            border-radius: 25px;
+            font-size: 16px;
             text-align: center;
-            display: none;
+            z-index: 100;
+        }
+        #status {
+            position: absolute;
+            top: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            color: white;
+            background: rgba(0,0,0,0.7);
+            padding: 10px 20px;
+            border-radius: 20px;
+            font-size: 14px;
+            z-index: 100;
+        }
+        .surface-indicator {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            width: 60px;
+            height: 60px;
+            border: 3px solid rgba(255,255,255,0.5);
+            border-radius: 50%;
+            pointer-events: none;
+            z-index: 99;
+            animation: pulse 2s infinite;
+        }
+        @keyframes pulse {
+            0% { transform: translate(-50%, -50%) scale(1); opacity: 0.5; }
+            50% { transform: translate(-50%, -50%) scale(1.1); opacity: 0.8; }
+            100% { transform: translate(-50%, -50%) scale(1); opacity: 0.5; }
         }
     </style>
 </head>
 <body>
-
-    <div id="start-overlay">
-        <div id="start-box">
-            <h2>AR BLOCK BUILDER</h2>
-            <p>SCAN THUMB THEN INDEX FINGER<br>
-               PINCH TO PLACE OR EXTRUDE</p>
-            <button id="btn-start">START</button>
-        </div>
+    <video id="video" autoplay playsinline></video>
+    <canvas id="canvas"></canvas>
+    <div id="loading">Loading AR Experience...</div>
+    <div id="instructions">
+        🖐️ <strong>How to use:</strong><br>
+        Point camera at a surface and tap to place the cube<br>
+        Use two hands to grab and lift the cube<br>
+        Pinch with both hands near the cube to grab it
     </div>
-
-    <div id="main-container">
-        <video id="camera-feed" autoplay playsinline muted></video>
-        <canvas id="three-canvas"></canvas>
-        <canvas id="overlay-canvas"></canvas>
-        <div id="calibration-ui">
-            <div id="finger-indicator">INITIALIZING...</div>
-            <div id="block-count-display">BLOCKS: 0</div>
-            <div id="scan-zone" class="scanning"></div>
-            <div id="calibration-instruction">PLACE THUMB IN CIRCLE</div>
-            <div id="calibration-progress">SCAN 1 OF 2</div>
-            <div id="calibration-dots">
-                <div class="cal-dot active" id="cal-dot-1"></div>
-                <div class="cal-dot" id="cal-dot-2"></div>
-            </div>
-        </div>
-    </div>
-
-    <div id="error-msg"></div>
-
-    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils@0.3.1675466862/camera_utils.js">
-    </script>
-    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands@0.4.1675469240/hands.js">
-    </script>
+    <div id="status">🔍 Looking for hands...</div>
+    <div class="surface-indicator"></div>
 
     <script type="importmap">
         {
             "imports": {
-                "three": "https://unpkg.com/three@0.160.0/build/three.module.js"
+                "three": "https://unpkg.com/three@0.157.0/build/three.module.js",
+                "three/addons/": "https://unpkg.com/three@0.157.0/examples/jsm/"
             }
         }
     </script>
 
     <script type="module">
         import * as THREE from 'three';
+        import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 
-        // ============================================
-        // CONSTANTS
-        // ============================================
-        const BLOCK_SIZE = 0.06;
-        const PINCH_PIXEL_THRESHOLD = 40;
-        const STABLE_PINCH_FRAMES = 6;
-        const REQUIRED_STABLE_FRAMES = 35;
+        // Wait for MediaPipe to load
+        const loadingDiv = document.getElementById('loading');
+        
+        // Load MediaPipe Hands
+        const handsModule = await import('https://cdn.jsdelivr.net/npm/@mediapipe/hands@0.4.1675469240/hands.js');
+        const cameraModule = await import('https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils@0.3.1675466862/camera_utils.js');
+        
+        const { Hands } = handsModule;
+        const { Camera } = cameraModule;
 
-        // ============================================
-        // STATE
-        // ============================================
-        let scene3D, camera3D, renderer3D;
-        let blocks = [];
-        let pinchWasDetected = false;
-        let stablePinchCount = 0;
+        loadingDiv.style.display = 'none';
 
-        let mainStream = null;
-        let mainVideo = null;
-        let overlayCanvas = null;
-        let overlayCtx = null;
-        let handsInstance = null;
-        let lastHandResults = null;
-        let calibrationStep = 0;
-        let calibrationStableFrames = 0;
-        let calibrationComplete = false;
-        let cameraUtilsInstance = null;
+        // Three.js setup
+        const canvas = document.getElementById('canvas');
+        const video = document.getElementById('video');
+        const renderer = new THREE.WebGLRenderer({ canvas, alpha: true });
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        renderer.setPixelRatio(window.devicePixelRatio);
 
-        let currentThumbTip = null;
-        let currentIndexTip = null;
-        let currentHandLandmarks = null;
+        const scene = new THREE.Scene();
+        const camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 100);
+        camera.position.set(0, 0, 0);
 
-        // Device motion / orientation for AR tracking
-        let deviceOrientation = { alpha: 0, beta: 0, gamma: 0 };
-        let hasOrientation = false;
-        let initialBeta = null;
-        let initialGamma = null;
+        // Lighting
+        const ambientLight = new THREE.AmbientLight(0xffffff, 0.5);
+        scene.add(ambientLight);
+        const directionalLight = new THREE.DirectionalLight(0xffffff, 0.5);
+        directionalLight.position.set(0, 1, 1);
+        scene.add(directionalLight);
 
-        // ============================================
-        // THREE.JS SETUP
-        // ============================================
-        function setupThreeJS() {
-            const canvas = document.getElementById('three-canvas');
-            canvas.width = window.innerWidth;
-            canvas.height = window.innerHeight;
-
-            scene3D = new THREE.Scene();
-
-            // Camera set up for AR-like view
-            camera3D = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.01, 100);
-            camera3D.position.set(0, 0, 0);
-            camera3D.lookAt(0, 0, -1);
-
-            renderer3D = new THREE.WebGLRenderer({
-                canvas: canvas,
-                antialias: true,
-                alpha: true,
-            });
-            renderer3D.setPixelRatio(Math.min(window.devicePixelRatio, 2));
-            renderer3D.setSize(window.innerWidth, window.innerHeight);
-            renderer3D.setClearColor(0x000000, 0);
-
-            const ambient = new THREE.AmbientLight(0xffffff, 0.8);
-            scene3D.add(ambient);
-
-            const dirLight = new THREE.DirectionalLight(0xffffff, 0.4);
-            dirLight.position.set(1, 1, -1);
-            scene3D.add(dirLight);
-        }
-
-        // ============================================
-        // 3D WIREFRAME BLOCK
-        // ============================================
-        function createBlock(worldPos) {
-            const group = new THREE.Group();
-            const half = BLOCK_SIZE / 2;
-            const geo = new THREE.BoxGeometry(BLOCK_SIZE, BLOCK_SIZE, BLOCK_SIZE);
-
-            const fillMat = new THREE.MeshBasicMaterial({
-                color: 0x00ff41,
-                transparent: true,
-                opacity: 0.1,
-                depthWrite: false,
-            });
-            group.add(new THREE.Mesh(geo, fillMat));
-
-            const edgeGeo = new THREE.EdgesGeometry(geo);
-            const edgeMat = new THREE.LineBasicMaterial({
-                color: 0x00ff41,
-                transparent: true,
-                opacity: 0.9,
-                linewidth: 1,
-            });
-            group.add(new THREE.LineSegments(edgeGeo, edgeMat));
-
-            const corners = [
-                [-half, -half, -half],
-                [half, -half, -half],
-                [-half, half, -half],
-                [half, half, -half],
-                [-half, -half, half],
-                [half, -half, half],
-                [-half, half, half],
-                [half, half, half],
-            ];
-            const dotGeo = new THREE.SphereGeometry(0.005, 8, 8);
-            const dotMat = new THREE.MeshBasicMaterial({ color: 0x00ff41 });
-            corners.forEach(c => {
-                const dot = new THREE.Mesh(dotGeo, dotMat);
-                dot.position.set(...c);
-                group.add(dot);
-            });
-
-            // Face center indicators
-            const faceDirs = [
-                { pos: [0, half, 0], rot: [0, 0, 0] },
-                { pos: [0, -half, 0], rot: [0, 0, 0] },
-                { pos: [half, 0, 0], rot: [0, 0, Math.PI / 2] },
-                { pos: [-half, 0, 0], rot: [0, 0, Math.PI / 2] },
-                { pos: [0, 0, half], rot: [Math.PI / 2, 0, 0] },
-                { pos: [0, 0, -half], rot: [Math.PI / 2, 0, 0] },
-            ];
-            faceDirs.forEach(f => {
-                const ringGeo = new THREE.RingGeometry(0.015, 0.022, 4);
-                const ringMat = new THREE.MeshBasicMaterial({
-                    color: 0x00ff41,
-                    side: THREE.DoubleSide,
+        // Create wireframe cube with diffraction-like colors
+        const cubeSize = 0.15;
+        const cubeGeometry = new THREE.BoxGeometry(cubeSize, cubeSize, cubeSize);
+        
+        // Create cube with rainbow wireframe effect
+        const cubeGroup = new THREE.Group();
+        
+        // Create multiple wireframe cubes with slight offsets for diffraction effect
+        const colors = [0xff0000, 0x00ff00, 0x0000ff, 0xff00ff, 0x00ffff, 0xffff00];
+        const offsets = [
+            [0, 0, 0],
+            [0.001, 0, 0],
+            [-0.001, 0, 0],
+            [0, 0.001, 0],
+            [0, -0.001, 0],
+            [0, 0, 0.001]
+        ];
+        
+        const wireframeCubes = [];
+        colors.forEach((color, index) => {
+            const edges = new THREE.EdgesGeometry(cubeGeometry);
+            const wireframe = new THREE.LineSegments(
+                edges,
+                new THREE.LineBasicMaterial({ 
+                    color: color,
+                    linewidth: 1,
                     transparent: true,
-                    opacity: 0.5,
-                });
-                const ring = new THREE.Mesh(ringGeo, ringMat);
-                ring.position.set(...f.pos);
-                ring.rotation.set(...f.rot);
-                group.add(ring);
-            });
+                    opacity: 0.8
+                })
+            );
+            wireframe.position.set(offsets[index][0], offsets[index][1], offsets[index][2]);
+            cubeGroup.add(wireframe);
+            wireframeCubes.push(wireframe);
+        });
 
-            group.position.copy(worldPos);
-            group.userData = { isBlock: true, halfSize: half };
-            return group;
-        }
+        // Add corner spheres for better visibility
+        const cornerGeometry = new THREE.SphereGeometry(0.008, 8, 8);
+        const cornerMaterial = new THREE.MeshBasicMaterial({ color: 0xffffff });
+        const corners = [
+            [-1, -1, -1], [1, -1, -1], [-1, 1, -1], [1, 1, -1],
+            [-1, -1, 1], [1, -1, 1], [-1, 1, 1], [1, 1, 1]
+        ];
+        corners.forEach(corner => {
+            const sphere = new THREE.Mesh(cornerGeometry, cornerMaterial);
+            sphere.position.set(
+                corner[0] * cubeSize / 2,
+                corner[1] * cubeSize / 2,
+                corner[2] * cubeSize / 2
+            );
+            cubeGroup.add(sphere);
+        });
 
-        function findNearestFace(point) {
-            let bestBlock = null;
-            let bestNormal = null;
-            let bestDist = 0.07;
-            const normals = [
-                new THREE.Vector3(0, 1, 0),
-                new THREE.Vector3(0, -1, 0),
-                new THREE.Vector3(1, 0, 0),
-                new THREE.Vector3(-1, 0, 0),
-                new THREE.Vector3(0, 0, 1),
-                new THREE.Vector3(0, 0, -1),
-            ];
-            for (const block of blocks) {
-                const half = block.userData.halfSize;
-                const bp = block.position;
-                const offsets = [
-                    new THREE.Vector3(0, half, 0),
-                    new THREE.Vector3(0, -half, 0),
-                    new THREE.Vector3(half, 0, 0),
-                    new THREE.Vector3(-half, 0, 0),
-                    new THREE.Vector3(0, 0, half),
-                    new THREE.Vector3(0, 0, -half),
-                ];
-                for (let i = 0; i < 6; i++) {
-                    const fc = bp.clone().add(offsets[i]);
-                    const dist = point.distanceTo(fc);
-                    if (dist < bestDist) {
-                        bestDist = dist;
-                        bestBlock = block;
-                        bestNormal = normals[i];
-                    }
-                }
-            }
-            return { block: bestBlock, normal: bestNormal };
-        }
+        cubeGroup.visible = false;
+        scene.add(cubeGroup);
 
-        function placeBlock(worldPos) {
-            const block = createBlock(worldPos);
-            scene3D.add(block);
-            blocks.push(block);
+        // Create hand wireframe representations
+        const handWireframes = {
+            left: new THREE.Group(),
+            right: new THREE.Group()
+        };
+        scene.add(handWireframes.left);
+        scene.add(handWireframes.right);
 
-            // Pop-in animation
-            block.scale.set(0.01, 0.01, 0.01);
-            const start = performance.now();
+        // Variables for cube interaction
+        let cubePlaced = false;
+        let isGrabbing = false;
+        let grabOffset = new THREE.Vector3();
+        let leftHandPos = null;
+        let rightHandPos = null;
+        let surfacePosition = new THREE.Vector3(0, -0.3, -0.5);
 
-            function anim(time) {
-                const t = Math.min((time - start) / 300, 1);
-                const eased = 1 - Math.pow(1 - t, 3);
-                block.scale.setScalar(eased);
-                if (t < 1) requestAnimationFrame(anim);
-            }
-            requestAnimationFrame(anim);
-
-            updateBlockCount();
-        }
-
-        function extrudeBlock(sourceBlock, normal) {
-            const offset = normal.clone().multiplyScalar(BLOCK_SIZE * 1.05);
-            const newPos = sourceBlock.position.clone().add(offset);
-            const block = createBlock(newPos);
-            scene3D.add(block);
-            blocks.push(block);
-
-            block.scale.set(0.01, 0.01, 0.01);
-            const start = performance.now();
-
-            function anim(time) {
-                const t = Math.min((time - start) / 300, 1);
-                const eased = 1 - Math.pow(1 - t, 3);
-                block.scale.setScalar(eased);
-                if (t < 1) requestAnimationFrame(anim);
-            }
-            requestAnimationFrame(anim);
-
-            updateBlockCount();
-        }
-
-        function updateBlockCount() {
-            const display = document.getElementById('block-count-display');
-            display.textContent = `BLOCKS: ${blocks.length}`;
-        }
-
-        // ============================================
-        // SCREEN TO WORLD (AR-like projection)
-        // ============================================
-        function screenToWorld(screenX, screenY) {
-            const ndcX = (screenX / window.innerWidth) * 2 - 1;
-            const ndcY = -(screenY / window.innerHeight) * 2 + 1;
-
-            const vec = new THREE.Vector3(ndcX, ndcY, -1);
-            vec.unproject(camera3D);
-            const dir = vec.sub(camera3D.position).normalize();
-            const distance = 0.4;
-            return camera3D.position.clone().add(dir.multiplyScalar(distance));
-        }
-
-        // ============================================
-        // DEVICE ORIENTATION FOR AR CAMERA
-        // ============================================
-        function setupOrientation() {
-            window.addEventListener('deviceorientation', (event) => {
-                if (event.alpha !== null) {
-                    deviceOrientation.alpha = event.alpha;
-                    deviceOrientation.beta = event.beta;
-                    deviceOrientation.gamma = event.gamma;
-
-                    if (initialBeta === null) {
-                        initialBeta = event.beta;
-                        initialGamma = event.gamma;
-                    }
-
-                    hasOrientation = true;
-                }
-            }, true);
-
-            // Request permission for iOS
-            if (typeof DeviceOrientationEvent !== 'undefined' &&
-                typeof DeviceOrientationEvent.requestPermission === 'function') {
-                DeviceOrientationEvent.requestPermission()
-                    .then(state => {
-                        if (state === 'granted') {
-                            console.log('Orientation permission granted');
-                        }
-                    })
-                    .catch(console.error);
-            }
-        }
-
-        function updateCameraFromOrientation() {
-            if (!hasOrientation) return;
-
-            const beta = deviceOrientation.beta - (initialBeta || 0);
-            const gamma = deviceOrientation.gamma - (initialGamma || 0);
-
-            const rotX = THREE.MathUtils.degToRad(beta * 0.5);
-            const rotY = THREE.MathUtils.degToRad(gamma * 0.5);
-
-            camera3D.rotation.x = rotX;
-            camera3D.rotation.y = rotY;
-            camera3D.rotation.z = 0;
-        }
-
-        // ============================================
-        // MEDIAPIPE HANDS
-        // ============================================
-        async function initMediaPipeHands() {
-            handsInstance = new Hands({
-                locateFile: (file) => {
-                    return `https://cdn.jsdelivr.net/npm/@mediapipe/hands@0.4.1675469240/${file}`;
+        // Setup camera
+        async function setupCamera() {
+            const stream = await navigator.mediaDevices.getUserMedia({
+                video: {
+                    facingMode: 'environment',
+                    width: { ideal: 1280 },
+                    height: { ideal: 720 }
                 }
             });
-            handsInstance.setOptions({
-                maxNumHands: 1,
-                modelComplexity: 1,
-                minDetectionConfidence: 0.7,
-                minTrackingConfidence: 0.7,
-            });
-            handsInstance.onResults(onHandResults);
+            video.srcObject = stream;
+            await video.play();
         }
 
-        function onHandResults(results) {
-            lastHandResults = results;
-            drawHandOverlay(results);
+        // Handle hand tracking results
+        function onResults(results) {
+            // Clear previous hand wireframes
+            handWireframes.left.clear();
+            handWireframes.right.clear();
 
             if (results.multiHandLandmarks && results.multiHandLandmarks.length > 0) {
-                const landmarks = results.multiHandLandmarks[0];
-                currentHandLandmarks = landmarks;
-                currentThumbTip = landmarks[4];
-                currentIndexTip = landmarks[8];
-            } else {
-                currentHandLandmarks = null;
-                currentThumbTip = null;
-                currentIndexTip = null;
-            }
-
-            if (!calibrationComplete) {
-                runCalibrationStep();
-            } else {
-                handlePinchDetection();
-            }
-        }
-
-        function drawHandOverlay(results) {
-            if (!overlayCtx) return;
-            const w = overlayCanvas.width;
-            const h = overlayCanvas.height;
-            overlayCtx.clearRect(0, 0, w, h);
-
-            if (!results.multiHandLandmarks || results.multiHandLandmarks.length === 0) return;
-
-            const landmarks = results.multiHandLandmarks[0];
-
-            const connections = [
-                [0, 1],
-                [1, 2],
-                [2, 3],
-                [3, 4],
-                [0, 5],
-                [5, 6],
-                [6, 7],
-                [7, 8],
-                [0, 9],
-                [9, 10],
-                [10, 11],
-                [11, 12],
-                [0, 13],
-                [13, 14],
-                [14, 15],
-                [15, 16],
-                [0, 17],
-                [17, 18],
-                [18, 19],
-                [19, 20],
-                [5, 9],
-                [9, 13],
-                [13, 17],
-            ];
-            overlayCtx.strokeStyle = 'rgba(0, 255, 65, 0.3)';
-            overlayCtx.lineWidth = 1;
-            connections.forEach(([a, b]) => {
-                const ax = landmarks[a].x * w;
-                const ay = landmarks[a].y * h;
-                const bx = landmarks[b].x * w;
-                const by = landmarks[b].y * h;
-                overlayCtx.beginPath();
-                overlayCtx.moveTo(ax, ay);
-                overlayCtx.lineTo(bx, by);
-                overlayCtx.stroke();
-            });
-
-            overlayCtx.fillStyle = 'rgba(0, 255, 65, 0.4)';
-            landmarks.forEach((lm) => {
-                const x = lm.x * w;
-                const y = lm.y * h;
-                overlayCtx.beginPath();
-                overlayCtx.arc(x, y, 3, 0, 2 * Math.PI);
-                overlayCtx.fill();
-            });
-
-            [4, 8].forEach(i => {
-                if (landmarks[i]) {
-                    const x = landmarks[i].x * w;
-                    const y = landmarks[i].y * h;
-                    const label = i === 4 ? 'THUMB' : 'INDEX';
-
-                    overlayCtx.fillStyle = '#00ff41';
-                    overlayCtx.beginPath();
-                    overlayCtx.arc(x, y, 11, 0, 2 * Math.PI);
-                    overlayCtx.fill();
-                    overlayCtx.strokeStyle = '#00ff41';
-                    overlayCtx.lineWidth = 2;
-                    overlayCtx.stroke();
-
-                    overlayCtx.fillStyle = '#000';
-                    overlayCtx.font = 'bold 11px "Courier New", monospace';
-                    overlayCtx.textAlign = 'center';
-                    overlayCtx.fillText(label, x, y - 19);
-                    overlayCtx.fillStyle = '#00ff41';
-                    overlayCtx.fillText(label, x, y - 18);
-                }
-            });
-        }
-
-        // ============================================
-        // CALIBRATION
-        // ============================================
-        function isFingerInZone(landmark) {
-            if (!landmark) return false;
-            const w = overlayCanvas.width;
-            const h = overlayCanvas.height;
-            const cx = w / 2;
-            const cy = h / 2;
-            const x = landmark.x * w;
-            const y = landmark.y * h;
-            const dx = x - cx;
-            const dy = y - cy;
-            return Math.sqrt(dx * dx + dy * dy) < 85;
-        }
-
-        function runCalibrationStep() {
-            const indicator = document.getElementById('finger-indicator');
-            const instruction = document.getElementById('calibration-instruction');
-            const progress = document.getElementById('calibration-progress');
-            const zone = document.getElementById('scan-zone');
-
-            if (!currentHandLandmarks) {
-                calibrationStableFrames = 0;
-                indicator.textContent = 'DETECTING HAND...';
-                zone.classList.remove('success');
-                zone.classList.add('scanning');
-                return;
-            }
-
-            indicator.textContent = 'HAND DETECTED';
-            const targetIdx = calibrationStep === 0 ? 4 : 8;
-            const targetName = calibrationStep === 0 ? 'THUMB' : 'INDEX FINGER';
-            const targetLandmark = currentHandLandmarks[targetIdx];
-
-            if (isFingerInZone(targetLandmark)) {
-                calibrationStableFrames++;
-                zone.classList.add('success');
-                zone.classList.remove('scanning');
-                instruction.textContent = `HOLD ${targetName} STEADY`;
-                const pct = Math.min(100, Math.round((calibrationStableFrames / REQUIRED_STABLE_FRAMES) * 100));
-                progress.textContent = `${pct}%`;
-
-                if (calibrationStableFrames >= REQUIRED_STABLE_FRAMES) {
-                    if (calibrationStep === 0) {
-                        calibrationStep = 1;
-                        calibrationStableFrames = 0;
-                        zone.classList.remove('success');
-                        zone.classList.add('scanning');
-                        instruction.textContent = 'PLACE INDEX FINGER IN CIRCLE';
-                        progress.textContent = 'SCAN 2 OF 2';
-                        document.getElementById('cal-dot-1').classList.remove('active');
-                        document.getElementById('cal-dot-1').classList.add('done');
-                        document.getElementById('cal-dot-2').classList.add('active');
-                    } else if (calibrationStep === 1) {
-                        calibrationComplete = true;
-                        calibrationStep = 2;
-                        document.getElementById('cal-dot-2').classList.remove('active');
-                        document.getElementById('cal-dot-2').classList.add('done');
-                        instruction.textContent = 'CALIBRATED';
-                        progress.textContent = '';
-                        indicator.textContent = 'READY';
-                        zone.classList.add('hidden');
-                        zone.classList.remove('success', 'scanning');
-                        document.getElementById('block-count-display').classList.add('visible');
-
-                        // Place initial 3D cube in world space
-                        const worldPos = new THREE.Vector3(0, 0, -0.4);
-                        placeBlock(worldPos);
-                    }
-                }
-            } else {
-                calibrationStableFrames = Math.max(0, calibrationStableFrames - 3);
-                zone.classList.remove('success');
-                zone.classList.add('scanning');
-                instruction.textContent = `PLACE ${targetName} IN CIRCLE`;
-                progress.textContent = calibrationStep === 0 ? 'SCAN 1 OF 2' : 'SCAN 2 OF 2';
-            }
-        }
-
-        // ============================================
-        // PINCH DETECTION
-        // ============================================
-        function handlePinchDetection() {
-            if (!currentThumbTip || !currentIndexTip) return;
-
-            const w = overlayCanvas.width;
-            const h = overlayCanvas.height;
-            const tx = currentThumbTip.x * w;
-            const ty = currentThumbTip.y * h;
-            const ix = currentIndexTip.x * w;
-            const iy = currentIndexTip.y * h;
-            const dx = tx - ix;
-            const dy = ty - iy;
-            const dist = Math.sqrt(dx * dx + dy * dy);
-
-            const isPinching = dist < PINCH_PIXEL_THRESHOLD;
-
-            if (isPinching) {
-                stablePinchCount++;
-            } else {
-                stablePinchCount = 0;
-            }
-
-            const stablePinch = stablePinchCount >= STABLE_PINCH_FRAMES;
-            const pinchTriggered = stablePinch && !pinchWasDetected;
-            pinchWasDetected = stablePinch;
-
-            if (pinchTriggered) {
-                const midX = (tx + ix) / 2;
-                const midY = (ty + iy) / 2;
-                const worldPos = screenToWorld(midX, midY);
-                const faceResult = findNearestFace(worldPos);
-
-                if (faceResult.block && faceResult.normal) {
-                    extrudeBlock(faceResult.block, faceResult.normal);
-                } else {
-                    placeBlock(worldPos);
-                }
-            }
-        }
-
-        // ============================================
-        // CAMERA SETUP - FORCE BACK CAMERA
-        // ============================================
-        async function startCamera() {
-            const video = document.getElementById('camera-feed');
-            const canvas = document.getElementById('overlay-canvas');
-            const errorEl = document.getElementById('error-msg');
-
-            canvas.width = window.innerWidth;
-            canvas.height = window.innerHeight;
-            overlayCanvas = canvas;
-            overlayCtx = canvas.getContext('2d');
-
-            try {
-                // Force back camera with exact constraint
-                mainStream = await navigator.mediaDevices.getUserMedia({
-                    video: {
-                        facingMode: { exact: 'environment' },
-                        width: { ideal: 1280 },
-                        height: { ideal: 720 },
+                document.getElementById('status').textContent = '🖐️ Hands detected!';
+                document.getElementById('status').style.color = '#00ff00';
+                
+                results.multiHandLandmarks.forEach((landmarks, index) => {
+                    const handedness = results.multiHandedness[index].label;
+                    const handGroup = handedness === 'Left' ? handWireframes.left : handWireframes.right;
+                    
+                    // Create wireframe for hand
+                    createHandWireframe(landmarks, handGroup, handedness);
+                    
+                    // Get pinch position (between thumb and index finger)
+                    const thumb = landmarks[4];
+                    const index = landmarks[8];
+                    const pinchPos = new THREE.Vector3(
+                        (thumb.x + index.x) / 2 - 0.5,
+                        -(thumb.y + index.y) / 2 + 0.5,
+                        -(thumb.z + index.z) / 2
+                    ).multiplyScalar(2);
+                    
+                    // Store hand positions
+                    if (handedness === 'Left') {
+                        leftHandPos = pinchPos;
+                    } else {
+                        rightHandPos = pinchPos;
                     }
                 });
-            } catch (e) {
-                // Fallback: try without exact
-                try {
-                    mainStream = await navigator.mediaDevices.getUserMedia({
-                        video: {
-                            facingMode: 'environment',
-                            width: { ideal: 1280 },
-                            height: { ideal: 720 },
+                
+                // Check if both hands are near the cube for grabbing
+                if (cubePlaced && leftHandPos && rightHandPos) {
+                    const cubePos = cubeGroup.position.clone();
+                    const leftDist = leftHandPos.distanceTo(cubePos);
+                    const rightDist = rightHandPos.distanceTo(cubePos);
+                    
+                    const grabThreshold = 0.15;
+                    
+                    if (leftDist < grabThreshold && rightDist < grabThreshold) {
+                        if (!isGrabbing) {
+                            isGrabbing = true;
+                            // Make cube brighter when grabbed
+                            wireframeCubes.forEach(cube => {
+                                cube.material.opacity = 1;
+                            });
+                            document.getElementById('status').textContent = '✊ Cube grabbed! Lift it up!';
+                            document.getElementById('status').style.color = '#ffff00';
                         }
-                    });
-                } catch (e2) {
-                    errorEl.textContent = 'BACK CAMERA UNAVAILABLE: ' + e2.message;
-                    errorEl.style.display = 'block';
-                    return;
-                }
-            }
-
-            video.srcObject = mainStream;
-            video.playsInline = true;
-            await video.play();
-            mainVideo = video;
-
-            document.getElementById('finger-indicator').textContent = 'INITIALIZING...';
-
-            if (!handsInstance) {
-                await initMediaPipeHands();
-            }
-
-            cameraUtilsInstance = new Camera(video, {
-                onFrame: async () => {
-                    if (handsInstance) {
-                        await handsInstance.send({ image: video });
+                        
+                        // Move cube to average position of both hands
+                        const avgPos = new THREE.Vector3()
+                            .addVectors(leftHandPos, rightHandPos)
+                            .multiplyScalar(0.5);
+                        
+                        cubeGroup.position.copy(avgPos);
+                        
+                        // Rotate cube based on hand positions
+                        const rotationAngle = Math.atan2(
+                            rightHandPos.y - leftHandPos.y,
+                            rightHandPos.x - leftHandPos.x
+                        );
+                        cubeGroup.rotation.z = rotationAngle;
+                        
+                    } else {
+                        if (isGrabbing) {
+                            isGrabbing = false;
+                            wireframeCubes.forEach(cube => {
+                                cube.material.opacity = 0.8;
+                            });
+                            document.getElementById('status').textContent = '🖐️ Hands detected - Grab the cube!';
+                            document.getElementById('status').style.color = '#00ff00';
+                        }
                     }
+                }
+                
+            } else {
+                document.getElementById('status').textContent = '🔍 Looking for hands...';
+                document.getElementById('status').style.color = '#ffffff';
+                leftHandPos = null;
+                rightHandPos = null;
+                
+                if (isGrabbing) {
+                    isGrabbing = false;
+                    wireframeCubes.forEach(cube => {
+                        cube.material.opacity = 0.8;
+                    });
+                }
+            }
+        }
+
+        function createHandWireframe(landmarks, group, handedness) {
+            // Create wireframe connections for hand
+            const connections = [
+                [0, 1], [1, 2], [2, 3], [3, 4], // Thumb
+                [0, 5], [5, 6], [6, 7], [7, 8], // Index
+                [0, 9], [9, 10], [10, 11], [11, 12], // Middle
+                [0, 13], [13, 14], [14, 15], [15, 16], // Ring
+                [0, 17], [17, 18], [18, 19], [19, 20], // Pinky
+                [5, 9], [9, 13], [13, 17] // Palm connections
+            ];
+            
+            const handColor = handedness === 'Left' ? 0x00ffff : 0xff00ff;
+            
+            connections.forEach(([start, end]) => {
+                const startPoint = landmarks[start];
+                const endPoint = landmarks[end];
+                
+                const geometry = new THREE.BufferGeometry();
+                const positions = new Float32Array([
+                    (startPoint.x - 0.5) * 2, -(startPoint.y - 0.5) * 2, -startPoint.z * 2,
+                    (endPoint.x - 0.5) * 2, -(endPoint.y - 0.5) * 2, -endPoint.z * 2
+                ]);
+                geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+                
+                const line = new THREE.Line(
+                    geometry,
+                    new THREE.LineBasicMaterial({ 
+                        color: handColor,
+                        linewidth: 1,
+                        transparent: true,
+                        opacity: 0.8
+                    })
+                );
+                group.add(line);
+            });
+            
+            // Add spheres at landmarks
+            landmarks.forEach(landmark => {
+                const sphereGeom = new THREE.SphereGeometry(0.008, 8, 8);
+                const sphereMat = new THREE.MeshBasicMaterial({ color: handColor });
+                const sphere = new THREE.Mesh(sphereGeom, sphereMat);
+                sphere.position.set(
+                    (landmark.x - 0.5) * 2,
+                    -(landmark.y - 0.5) * 2,
+                    -landmark.z * 2
+                );
+                group.add(sphere);
+            });
+        }
+
+        // Initialize MediaPipe Hands
+        const hands = new Hands({
+            locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/hands@0.4.1675469240/${file}`
+        });
+
+        hands.setOptions({
+            maxNumHands: 2,
+            modelComplexity: 1,
+            minDetectionConfidence: 0.7,
+            minTrackingConfidence: 0.5
+        });
+
+        hands.onResults(onResults);
+
+        // Start camera
+        async function start() {
+            await setupCamera();
+            const cameraInstance = new Camera(video, {
+                onFrame: async () => {
+                    await hands.send({ image: video });
                 },
-                width: 640,
-                height: 480,
+                width: 1280,
+                height: 720
             });
-            cameraUtilsInstance.start();
+            cameraInstance.start();
         }
 
-        // ============================================
-        // RENDER LOOP
-        // ============================================
-        function renderLoop() {
-            updateCameraFromOrientation();
-            renderer3D.render(scene3D, camera3D);
-            requestAnimationFrame(renderLoop);
+        // Handle surface detection and cube placement
+        canvas.addEventListener('click', (event) => {
+            if (!cubePlaced) {
+                // Place cube at surface position
+                cubeGroup.position.copy(surfacePosition);
+                cubeGroup.visible = true;
+                cubePlaced = true;
+                document.getElementById('status').textContent = '🟦 Cube placed! Grab it with both hands.';
+                document.getElementById('status').style.color = '#00ff00';
+                document.querySelector('.surface-indicator').style.display = 'none';
+            }
+        });
+
+        // Touch support for mobile
+        canvas.addEventListener('touchstart', (event) => {
+            event.preventDefault();
+            if (!cubePlaced) {
+                cubeGroup.position.copy(surfacePosition);
+                cubeGroup.visible = true;
+                cubePlaced = true;
+                document.getElementById('status').textContent = '🟦 Cube placed! Grab it with both hands.';
+                document.getElementById('status').style.color = '#00ff00';
+                document.querySelector('.surface-indicator').style.display = 'none';
+            }
+        });
+
+        // Animation loop
+        function animate() {
+            requestAnimationFrame(animate);
+            renderer.render(scene, camera);
         }
 
-        // ============================================
-        // START
-        // ============================================
-        function startApp() {
-            document.getElementById('start-overlay').style.display = 'none';
-            document.getElementById('main-container').style.display = 'block';
-            setupThreeJS();
-            setupOrientation();
-            startCamera();
-            requestAnimationFrame(renderLoop);
-        }
+        // Handle window resize
+        window.addEventListener('resize', () => {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        });
 
-        // ============================================
-        // INIT
-        // ============================================
-        function init() {
-            document.getElementById('btn-start').addEventListener('click', () => {
-                startApp();
+        // Keyboard controls for testing without camera
+        window.addEventListener('keydown', (event) => {
+            if (event.key === 'p' && !cubePlaced) {
+                cubeGroup.position.copy(surfacePosition);
+                cubeGroup.visible = true;
+                cubePlaced = true;
+                document.getElementById('status').textContent = '🟦 Cube placed! Grab it with both hands.';
+                document.getElementById('status').style.color = '#00ff00';
+                document.querySelector('.surface-indicator').style.display = 'none';
+            }
+        });
+
+        // Start everything
+        start().catch(error => {
+            console.error('Error starting AR:', error);
+            document.getElementById('loading').textContent = 'Error: Could not access camera. Please allow camera access.';
+            document.getElementById('loading').style.display = 'block';
+            
+            // Fallback: Use mouse for testing
+            document.getElementById('status').textContent = '🖱️ Camera not available - Use mouse for testing';
+            setupMouseFallback();
+        });
+
+        function setupMouseFallback() {
+            let mouseX = 0, mouseY = 0;
+            
+            canvas.addEventListener('mousemove', (event) => {
+                mouseX = (event.clientX / window.innerWidth) * 2 - 1;
+                mouseY = -(event.clientY / window.innerHeight) * 2 + 1;
+                
+                if (isGrabbing && cubePlaced) {
+                    cubeGroup.position.x = mouseX * 0.5;
+                    cubeGroup.position.y = mouseY * 0.5;
+                    cubeGroup.position.z = -0.5;
+                }
             });
-
-            window.addEventListener('resize', () => {
-                if (renderer3D) {
-                    renderer3D.setSize(window.innerWidth, window.innerHeight);
-                    camera3D.aspect = window.innerWidth / window.innerHeight;
-                    camera3D.updateProjectionMatrix();
+            
+            canvas.addEventListener('mousedown', () => {
+                if (cubePlaced) {
+                    isGrabbing = true;
+                    wireframeCubes.forEach(cube => {
+                        cube.material.opacity = 1;
+                    });
+                    document.getElementById('status').textContent = '✊ Cube grabbed! Move mouse to lift it!';
+                    document.getElementById('status').style.color = '#ffff00';
                 }
-                if (overlayCanvas) {
-                    overlayCanvas.width = window.innerWidth;
-                    overlayCanvas.height = window.innerHeight;
-                }
-                const threeCanvas = document.getElementById('three-canvas');
-                if (threeCanvas) {
-                    threeCanvas.width = window.innerWidth;
-                    threeCanvas.height = window.innerHeight;
+            });
+            
+            canvas.addEventListener('mouseup', () => {
+                isGrabbing = false;
+                wireframeCubes.forEach(cube => {
+                    cube.material.opacity = 0.8;
+                });
+                if (cubePlaced) {
+                    document.getElementById('status').textContent = '🟦 Cube placed - Click and drag to lift';
+                    document.getElementById('status').style.color = '#00ff00';
                 }
             });
         }
 
-        init();
+        // Start animation loop
+        animate();
+
+        console.log('AR Cube Lifter initialized!');
+        console.log('Place your phone camera facing a surface');
+        console.log('Tap screen to place cube');
+        console.log('Use both hands to grab and lift the cube');
     </script>
 </body>
 </html>
