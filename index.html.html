@@ -2,14 +2,12 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>AR Block Builder - Wireframe</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>AR Block Builder</title>
     <style>
         :root {
             --neon-green: #00ff41;
-            --dark-bg: #0a0a0a;
-            --panel-bg: rgba(10, 10, 10, 0.85);
-            --border-glow: 0 0 15px rgba(0, 255, 65, 0.3);
+            --dark-bg: #000000;
         }
 
         * {
@@ -24,797 +22,559 @@
             overflow: hidden;
             height: 100vh;
             width: 100vw;
-            user-select: none;
-            -webkit-user-select: none;
             touch-action: none;
-        }
-
-        #ar-container {
+            -webkit-touch-callout: none;
+            -webkit-user-select: none;
+            user-select: none;
             position: fixed;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            z-index: 1;
         }
 
-        canvas {
-            display: block;
-        }
-
-        /* Wireframe UI Panel */
-        .ui-panel {
+        #status-line {
             position: fixed;
-            z-index: 10;
-            background: var(--panel-bg);
-            border: 2px solid var(--neon-green);
-            box-shadow: var(--border-glow), inset 0 0 20px rgba(0, 255, 65, 0.05);
-            color: var(--neon-green);
-            padding: 16px 20px;
-            backdrop-filter: blur(12px);
-            -webkit-backdrop-filter: blur(12px);
-        }
-
-        .ui-panel.top {
-            top: 20px;
+            bottom: 40px;
             left: 50%;
             transform: translateX(-50%);
-            border-radius: 4px;
-            text-align: center;
-        }
-
-        .ui-panel.status {
-            bottom: 30px;
-            left: 20px;
-            border-radius: 4px;
-            min-width: 220px;
-        }
-
-        .ui-panel.controls {
-            bottom: 30px;
-            right: 20px;
-            border-radius: 4px;
-            min-width: 200px;
-        }
-
-        .panel-title {
-            font-size: 11px;
-            letter-spacing: 3px;
+            z-index: 10;
+            color: var(--neon-green);
+            font-size: 10px;
+            letter-spacing: 2px;
             text-transform: uppercase;
             opacity: 0.7;
-            margin-bottom: 6px;
-        }
-
-        .panel-value {
-            font-size: 15px;
-            font-weight: bold;
-            letter-spacing: 1px;
-        }
-
-        .indicator-dot {
-            display: inline-block;
-            width: 8px;
-            height: 8px;
-            border-radius: 50%;
-            background: var(--neon-green);
-            margin-right: 8px;
-            animation: pulse 2s infinite;
-        }
-
-        @keyframes pulse {
-            0%, 100% { opacity: 1; box-shadow: 0 0 6px var(--neon-green); }
-            50% { opacity: 0.4; box-shadow: 0 0 2px var(--neon-green); }
-        }
-
-        .gesture-hint {
-            font-size: 10px;
-            letter-spacing: 1.5px;
-            opacity: 0.6;
-            margin-top: 4px;
-            line-height: 1.5;
-        }
-
-        .gesture-hint span {
-            opacity: 1;
-            font-weight: bold;
-        }
-
-        /* Scan line effect on panels */
-        .ui-panel::after {
-            content: '';
-            position: absolute;
-            top: 0;
-            left: 0;
-            right: 0;
-            bottom: 0;
-            background: repeating-linear-gradient(
-                0deg,
-                transparent,
-                transparent 2px,
-                rgba(0, 255, 65, 0.015) 2px,
-                rgba(0, 255, 65, 0.015) 4px
-            );
+            text-align: center;
             pointer-events: none;
-            border-radius: inherit;
+            text-shadow: 0 0 8px rgba(0, 255, 65, 0.4);
+            transition: opacity 0.5s;
         }
 
-        /* Permission prompt */
-        .permission-overlay {
+        #start-overlay {
             position: fixed;
             top: 0;
             left: 0;
             width: 100%;
             height: 100%;
-            background: rgba(0, 0, 0, 0.9);
+            background: #000;
             z-index: 100;
             display: flex;
             align-items: center;
             justify-content: center;
         }
 
-        .permission-box {
+        #start-box {
             border: 2px solid var(--neon-green);
-            padding: 40px;
+            padding: 48px 32px;
             text-align: center;
             color: var(--neon-green);
-            background: var(--panel-bg);
-            max-width: 420px;
-            box-shadow: var(--border-glow);
+            background: rgba(0, 0, 0, 0.9);
+            max-width: 340px;
+            box-shadow: 0 0 30px rgba(0, 255, 65, 0.15), inset 0 0 30px rgba(0, 255, 65, 0.03);
         }
 
-        .permission-box h2 {
-            font-size: 18px;
-            letter-spacing: 4px;
-            margin-bottom: 16px;
+        #start-box h2 {
+            font-size: 16px;
+            letter-spacing: 5px;
+            margin-bottom: 20px;
             font-weight: normal;
         }
 
-        .permission-box p {
-            font-size: 12px;
-            opacity: 0.7;
-            margin-bottom: 24px;
-            line-height: 1.6;
+        #start-box p {
+            font-size: 11px;
+            opacity: 0.6;
+            margin-bottom: 28px;
+            line-height: 1.7;
+            letter-spacing: 1px;
         }
 
-        .btn-start {
+        #btn-start {
             background: transparent;
             border: 2px solid var(--neon-green);
             color: var(--neon-green);
-            padding: 12px 36px;
+            padding: 14px 40px;
             font-family: inherit;
-            font-size: 14px;
-            letter-spacing: 3px;
+            font-size: 13px;
+            letter-spacing: 4px;
             cursor: pointer;
-            transition: all 0.3s;
             text-transform: uppercase;
+            transition: all 0.3s;
         }
 
-        .btn-start:hover {
+        #btn-start:hover,
+        #btn-start:active {
             background: var(--neon-green);
             color: #000;
-            box-shadow: 0 0 25px rgba(0, 255, 65, 0.5);
+            box-shadow: 0 0 30px rgba(0, 255, 65, 0.6);
         }
 
-        .fingertip-debug {
-            position: fixed;
-            bottom: 30px;
-            left: 50%;
-            transform: translateX(-50%);
-            z-index: 10;
-            color: var(--neon-green);
-            font-family: 'Courier New', monospace;
-            font-size: 10px;
-            letter-spacing: 1px;
-            opacity: 0.5;
-            text-align: center;
+        #btn-start:disabled {
+            opacity: 0.3;
+            cursor: not-allowed;
+        }
+
+        .scanning-text {
+            animation: scanPulse 1.5s infinite;
+        }
+
+        @keyframes scanPulse {
+            0%, 100% { opacity: 0.5; }
+            50% { opacity: 1; }
         }
     </style>
 </head>
 <body>
 
-    <div class="permission-overlay" id="permission-overlay">
-        <div class="permission-box">
+    <div id="start-overlay">
+        <div id="start-box">
             <h2>AR BLOCK BUILDER</h2>
-            <p>WIREFRAME MODE<br>Camera access required for hand tracking.<br>Use fingertips to place and pull blocks.</p>
-            <button class="btn-start" id="btn-start">INITIALIZE AR</button>
+            <p>SHOW YOUR HANDS TO CAMERA<br>
+               SCANNING INDEX AND THUMB<br>
+               PINCH TO PLACE OR EXTRUDE</p>
+            <button id="btn-start">ENTER AR</button>
         </div>
     </div>
 
-    <div class="ui-panel top" id="mode-panel">
-        <div class="panel-title">MODE</div>
-        <div class="panel-value"><span class="indicator-dot"></span>PLACE</div>
-    </div>
-
-    <div class="ui-panel status">
-        <div class="panel-title">FINGERTIPS TRACKED</div>
-        <div class="panel-value" id="fingertip-count">0 / 2</div>
-        <div class="gesture-hint">PINCH: <span>PLACE</span></div>
-    </div>
-
-    <div class="ui-panel controls">
-        <div class="panel-title">BLOCK COUNT</div>
-        <div class="panel-value" id="block-count">0</div>
-        <div class="gesture-hint">PULL SIDE: <span>EXTRUDE</span></div>
-    </div>
-
-    <div class="fingertip-debug" id="debug-info"></div>
-
-    <div id="ar-container"></div>
-
-    <script type="importmap">
-        {
-            "imports": {
-                "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
-                "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/"
-            }
-        }
-    </script>
+    <div id="status-line">SHOW HANDS TO BEGIN</div>
 
     <script type="module">
-        import * as THREE from 'three';
+        import * as THREE from 'https://unpkg.com/three@0.160.0/build/three.module.js';
 
         // ============================================
-        // APP STATE
+        // GLOBAL STATE
         // ============================================
-        const state = {
-            mode: 'place', // 'place' | 'extrude'
-            blocks: [],
-            fingertips: [], // Array of {x, y, z} in world space
-            trackedHands: new Map(), // Map of hand landmarks
-            pinchDetected: false,
-            prevPinchDistance: 0,
-            video: null,
-            cameraStream: null,
-        };
+        const BLOCK_SIZE = 0.08; // 8cm blocks in world space
+        const EXTRUDE_DISTANCE = 0.09;
+        const PINCH_THRESHOLD = 0.025;
+
+        let xrSession = null;
+        let xrReferenceSpace = null;
+        let xrHands = null;
+        let scene, camera, renderer;
+        let blocks = [];
+        let handMeshes = [];
+        let pinchWasDetected = false;
+        let stablePinchCounter = 0;
+        const STABLE_PINCH_FRAMES = 8;
 
         // ============================================
-        // THREE.JS SETUP
+        // THREE.JS SETUP (Minimal)
         // ============================================
-        const container = document.getElementById('ar-container');
-        const scene = new THREE.Scene();
-        scene.background = null; // Transparent for AR overlay feel
+        function setupThreeJS() {
+            scene = new THREE.Scene();
 
-        const camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.01, 100);
-        camera.position.set(0, 1.6, 3);
-        camera.lookAt(0, 0, 0);
+            camera = new THREE.PerspectiveCamera(70, 1, 0.01, 50);
 
-        const renderer = new THREE.WebGLRenderer({ 
-            antialias: true, 
-            alpha: true 
-        });
-        renderer.setSize(window.innerWidth, window.innerHeight);
-        renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
-        renderer.setClearColor(0x000000, 0);
-        container.appendChild(renderer.domElement);
+            renderer = new THREE.WebGLRenderer({
+                antialias: true,
+                alpha: true,
+            });
+            renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            renderer.xr.enabled = true;
+            renderer.setClearColor(0x000000, 0);
+            document.body.appendChild(renderer.domElement);
 
-        // Lighting for edge visibility
-        const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
-        scene.add(ambientLight);
-        const directionalLight = new THREE.DirectionalLight(0xffffff, 0.4);
-        directionalLight.position.set(1, 1, 1);
-        scene.add(directionalLight);
+            const ambientLight = new THREE.AmbientLight(0xffffff, 0.5);
+            scene.add(ambientLight);
+        }
 
         // ============================================
-        // GRID FLOOR (Reference plane)
+        // WIREFRAME BLOCK
         // ============================================
-        const gridHelper = new THREE.PolarGridHelper(2, 32, 24, 64, 0x00ff41, 0x00ff41);
-        gridHelper.position.y = -0.5;
-        scene.add(gridHelper);
-
-        // ============================================
-        // WIREFRAME BLOCK CREATION
-        // ============================================
-        function createWireframeBlock(position, size = { x: 0.2, y: 0.2, z: 0.2 }) {
+        function createWireframeBlock(position) {
             const group = new THREE.Group();
+            const half = BLOCK_SIZE / 2;
 
-            // Solid semi-transparent inner face
-            const geo = new THREE.BoxGeometry(size.x, size.y, size.z);
+            const geo = new THREE.BoxGeometry(BLOCK_SIZE, BLOCK_SIZE, BLOCK_SIZE);
             const mat = new THREE.MeshBasicMaterial({
                 color: 0x00ff41,
                 transparent: true,
-                opacity: 0.08,
+                opacity: 0.06,
                 depthWrite: false,
             });
             const innerBox = new THREE.Mesh(geo, mat);
             group.add(innerBox);
 
-            // Thick wireframe edges
             const edgesGeo = new THREE.EdgesGeometry(geo);
             const edgesMat = new THREE.LineBasicMaterial({
                 color: 0x00ff41,
-                linewidth: 1,
                 transparent: true,
                 opacity: 0.9,
             });
             const wireframe = new THREE.LineSegments(edgesGeo, edgesMat);
             group.add(wireframe);
 
-            // Corner spheres for connection points
-            const cornerPositions = [
-                [-size.x/2, -size.y/2, -size.z/2], [size.x/2, -size.y/2, -size.z/2],
-                [-size.x/2, size.y/2, -size.z/2], [size.x/2, size.y/2, -size.z/2],
-                [-size.x/2, -size.y/2, size.z/2], [size.x/2, -size.y/2, size.z/2],
-                [-size.x/2, size.y/2, size.z/2], [size.x/2, size.y/2, size.z/2],
+            // Corner dots
+            const corners = [
+                [-half, -half, -half], [half, -half, -half],
+                [-half, half, -half], [half, half, -half],
+                [-half, -half, half], [half, -half, half],
+                [-half, half, half], [half, half, half],
             ];
-
-            cornerPositions.forEach(pos => {
-                const dotGeo = new THREE.SphereGeometry(0.015, 8, 8);
+            corners.forEach(c => {
+                const dotGeo = new THREE.SphereGeometry(0.006, 6, 6);
                 const dotMat = new THREE.MeshBasicMaterial({ color: 0x00ff41 });
                 const dot = new THREE.Mesh(dotGeo, dotMat);
-                dot.position.set(pos[0], pos[1], pos[2]);
+                dot.position.set(...c);
                 group.add(dot);
-            });
-
-            // Face center indicators (small X markers)
-            const faceCenters = [
-                { pos: [0, size.y/2, 0], rot: [0, 0, 0] },       // top
-                { pos: [0, -size.y/2, 0], rot: [0, 0, 0] },      // bottom
-                { pos: [size.x/2, 0, 0], rot: [0, 0, Math.PI/2] }, // right
-                { pos: [-size.x/2, 0, 0], rot: [0, 0, Math.PI/2] },// left
-                { pos: [0, 0, size.z/2], rot: [Math.PI/2, 0, 0] }, // front
-                { pos: [0, 0, -size.z/2], rot: [Math.PI/2, 0, 0] },// back
-            ];
-
-            faceCenters.forEach(face => {
-                const indicatorGeo = new THREE.RingGeometry(0.03, 0.04, 4);
-                const indicatorMat = new THREE.MeshBasicMaterial({
-                    color: 0x00ff41,
-                    side: THREE.DoubleSide,
-                    transparent: true,
-                    opacity: 0.5,
-                });
-                const indicator = new THREE.Mesh(indicatorGeo, indicatorMat);
-                indicator.position.set(...face.pos);
-                indicator.rotation.set(...face.rot);
-                group.add(indicator);
             });
 
             group.position.copy(position);
             group.userData = {
                 isBlock: true,
-                size: { ...size },
-                blockId: Date.now() + Math.random(),
+                blockId: crypto.randomUUID(),
+                halfSize: half,
             };
 
             return group;
         }
 
         // ============================================
-        // EXTRUDE BLOCK FROM SIDE (Pull mechanic)
-        // ============================================
-        function extrudeBlockFromFace(sourceBlock, faceNormal) {
-            const size = sourceBlock.userData.size;
-            const sourcePos = sourceBlock.position.clone();
-
-            // Calculate offset based on face normal and block size
-            const offset = faceNormal.clone().multiplyScalar(
-                Math.max(size.x, size.y, size.z) * 1.0
-            );
-
-            const newPosition = sourcePos.clone().add(offset);
-            const newBlock = createWireframeBlock(newPosition, { ...size });
-            
-            scene.add(newBlock);
-            state.blocks.push(newBlock);
-
-            // Animate extrusion (scale from 0)
-            newBlock.scale.set(0.01, 0.01, 0.01);
-            const startTime = performance.now();
-            const duration = 300;
-
-            function animateExtrusion(time) {
-                const elapsed = time - startTime;
-                const progress = Math.min(elapsed / duration, 1.0);
-                // Ease out cubic
-                const eased = 1 - Math.pow(1 - progress, 3);
-                newBlock.scale.setScalar(eased);
-                
-                if (progress < 1) {
-                    requestAnimationFrame(animateExtrusion);
-                }
-            }
-            requestAnimationFrame(animateExtrusion);
-
-            updateBlockCount();
-            return newBlock;
-        }
-
-        // ============================================
         // FIND NEAREST FACE FOR EXTRUSION
         // ============================================
-        function findNearestBlockFace(fingertipWorldPos) {
-            let nearestBlock = null;
-            let nearestFace = null;
-            let minDistance = 0.12; // Max grab distance for face detection
+        function findNearestFace(point) {
+            let bestBlock = null;
+            let bestNormal = null;
+            let bestDist = 0.06;
 
-            for (const block of state.blocks) {
-                const size = block.userData.size;
-                const blockPos = block.position;
-                
-                const faceNormals = [
-                    new THREE.Vector3(0, 1, 0),   // top
-                    new THREE.Vector3(0, -1, 0),  // bottom
-                    new THREE.Vector3(1, 0, 0),   // right
-                    new THREE.Vector3(-1, 0, 0),  // left
-                    new THREE.Vector3(0, 0, 1),   // front
-                    new THREE.Vector3(0, 0, -1),  // back
-                ];
+            const faceNormals = [
+                new THREE.Vector3(0, 1, 0),
+                new THREE.Vector3(0, -1, 0),
+                new THREE.Vector3(1, 0, 0),
+                new THREE.Vector3(-1, 0, 0),
+                new THREE.Vector3(0, 0, 1),
+                new THREE.Vector3(0, 0, -1),
+            ];
+
+            for (const block of blocks) {
+                const half = block.userData.halfSize;
+                const bp = block.position;
 
                 const faceOffsets = [
-                    new THREE.Vector3(0, size.y/2, 0),
-                    new THREE.Vector3(0, -size.y/2, 0),
-                    new THREE.Vector3(size.x/2, 0, 0),
-                    new THREE.Vector3(-size.x/2, 0, 0),
-                    new THREE.Vector3(0, 0, size.z/2),
-                    new THREE.Vector3(0, 0, -size.z/2),
+                    new THREE.Vector3(0, half, 0),
+                    new THREE.Vector3(0, -half, 0),
+                    new THREE.Vector3(half, 0, 0),
+                    new THREE.Vector3(-half, 0, 0),
+                    new THREE.Vector3(0, 0, half),
+                    new THREE.Vector3(0, 0, -half),
                 ];
 
                 for (let i = 0; i < 6; i++) {
-                    const faceCenter = blockPos.clone().add(faceOffsets[i]);
-                    const distance = fingertipWorldPos.distanceTo(faceCenter);
-
-                    if (distance < minDistance) {
-                        minDistance = distance;
-                        nearestBlock = block;
-                        nearestFace = faceNormals[i];
+                    const faceCenter = bp.clone().add(faceOffsets[i]);
+                    const dist = point.distanceTo(faceCenter);
+                    if (dist < bestDist) {
+                        bestDist = dist;
+                        bestBlock = block;
+                        bestNormal = faceNormals[i];
                     }
                 }
             }
 
-            return { block: nearestBlock, faceNormal: nearestFace, distance: minDistance };
+            return { block: bestBlock, normal: bestNormal };
         }
 
         // ============================================
-        // FINGERTIP VISUALIZATION (Wireframe spheres)
+        // PLACE BLOCK
         // ============================================
-        const fingertipMarkers = [];
-        for (let i = 0; i < 10; i++) {
-            const markerGeo = new THREE.SphereGeometry(0.025, 16, 16);
-            const markerMat = new THREE.MeshBasicMaterial({
+        function placeBlock(position) {
+            const block = createWireframeBlock(position);
+            scene.add(block);
+            blocks.push(block);
+            return block;
+        }
+
+        // ============================================
+        // EXTRUDE BLOCK
+        // ============================================
+        function extrudeBlock(sourceBlock, normal) {
+            const offset = normal.clone().multiplyScalar(BLOCK_SIZE * 1.05);
+            const newPos = sourceBlock.position.clone().add(offset);
+            const block = createWireframeBlock(newPos);
+            scene.add(block);
+            blocks.push(block);
+
+            // Extrude animation
+            block.scale.set(0.01, 0.01, 0.01);
+            const startTime = performance.now();
+            const duration = 250;
+
+            function animateExtrude(time) {
+                const elapsed = time - startTime;
+                const progress = Math.min(elapsed / duration, 1.0);
+                const eased = 1 - Math.pow(1 - progress, 3);
+                block.scale.setScalar(eased);
+                if (progress < 1) {
+                    requestAnimationFrame(animateExtrude);
+                }
+            }
+            requestAnimationFrame(animateExtrude);
+
+            return block;
+        }
+
+        // ============================================
+        // HAND JOINT MESHES
+        // ============================================
+        function createJointMesh() {
+            const geo = new THREE.SphereGeometry(0.006, 8, 8);
+            const mat = new THREE.MeshBasicMaterial({
                 color: 0x00ff41,
                 transparent: true,
                 opacity: 0.7,
-                wireframe: false,
             });
-            const marker = new THREE.Mesh(markerGeo, markerMat);
-            marker.visible = false;
-            scene.add(marker);
-            fingertipMarkers.push(marker);
-
-            // Wireframe ring around marker
-            const ringGeo = new THREE.TorusGeometry(0.035, 0.005, 8, 16);
-            const ringMat = new THREE.MeshBasicMaterial({ color: 0x00ff41 });
-            const ring = new THREE.Mesh(ringGeo, ringMat);
-            ring.visible = false;
-            marker.add(ring);
+            return new THREE.Mesh(geo, mat);
         }
 
-        // ============================================
-        // HAND TRACKING VIA MEDIAPIPE (Simplified with canvas overlay)
-        // Since full MediaPipe in vanilla JS is complex, we'll use 
-        // camera-based color tracking as a practical approximation
-        // with gesture simulation for the demo
-        // ============================================
-        
-        // For a real implementation, we'd use MediaPipe Hands.
-        // Here we use a pragmatic approach: track the video feed,
-        // simulate fingertip positions based on motion detection,
-        // and allow mouse/touch as fallback control.
+        function createConnectionLine() {
+            const geo = new THREE.BufferGeometry();
+            const mat = new THREE.LineBasicMaterial({
+                color: 0x00ff41,
+                transparent: true,
+                opacity: 0.4,
+            });
+            return new THREE.Line(geo, mat);
+        }
 
-        let videoElement = null;
-        let videoCanvas = null;
-        let videoCtx = null;
-
-        // Simulated fingertips in 3D space (will be updated from tracking)
-        let indexFingertip = new THREE.Vector3(0, 0.3, 0.8);
-        let thumbFingertip = new THREE.Vector3(0.05, 0.25, 0.8);
-        let isPinching = false;
-
-        // ============================================
-        // VIDEO BACKGROUND SETUP
-        // ============================================
-        async function setupCamera() {
-            try {
-                const stream = await navigator.mediaDevices.getUserMedia({
-                    video: {
-                        facingMode: 'environment',
-                        width: { ideal: 1280 },
-                        height: { ideal: 720 },
-                    }
-                });
-                state.cameraStream = stream;
-                
-                videoElement = document.createElement('video');
-                videoElement.srcObject = stream;
-                videoElement.playsInline = true;
-                await videoElement.play();
-
-                // Create video texture for background
-                const videoTexture = new THREE.VideoTexture(videoElement);
-                videoTexture.colorSpace = THREE.SRGBColorSpace;
-                
-                // Background plane
-                const bgGeo = new THREE.PlaneGeometry(4.8, 3.6);
-                const bgMat = new THREE.MeshBasicMaterial({
-                    map: videoTexture,
-                    depthTest: false,
-                    depthWrite: false,
-                });
-                const bgPlane = new THREE.Mesh(bgGeo, bgMat);
-                bgPlane.position.z = -2;
-                bgPlane.renderOrder = -1;
-                scene.add(bgPlane);
-
-                return true;
-            } catch (err) {
-                console.warn('Camera not available, using fallback:', err);
-                return false;
+        function setupHandVisuals() {
+            handMeshes = [];
+            for (let h = 0; h < 2; h++) {
+                const handGroup = new THREE.Group();
+                const joints = [];
+                for (let i = 0; i < 25; i++) {
+                    const joint = createJointMesh();
+                    joint.visible = false;
+                    handGroup.add(joint);
+                    joints.push(joint);
+                }
+                handGroup.userData = { joints };
+                handMeshes.push(handGroup);
+                scene.add(handGroup);
             }
         }
 
-        // ============================================
-        // FINGERTIP TRACKING (Image processing)
-        // ============================================
-        function setupVideoProcessing() {
-            videoCanvas = document.createElement('canvas');
-            videoCanvas.width = 320;
-            videoCanvas.height = 240;
-            videoCtx = videoCanvas.getContext('2d', { willReadFrequently: true });
-        }
+        function updateHandVisuals(handIndex, joints) {
+            const handGroup = handMeshes[handIndex];
+            const jointMeshes = handGroup.userData.joints;
 
-        function processVideoFrame() {
-            if (!videoElement || !videoCtx || videoElement.readyState < 2) return;
+            // Thumb: 1,2,3,4
+            // Index: 5,6,7,8
+            const thumbTip = joints[4];
+            const indexTip = joints[8];
 
-            videoCtx.drawImage(videoElement, 0, 0, 320, 240);
-            const imageData = videoCtx.getImageData(0, 0, 320, 240);
-            const pixels = imageData.data;
-
-            // Simple skin-color detection to find hand positions
-            // This is a pragmatic fallback; full MediaPipe would be more accurate
-            let totalSkinX = 0, totalSkinY = 0, skinCount = 0;
-            
-            for (let y = 0; y < 240; y += 4) {
-                for (let x = 0; x < 320; x += 4) {
-                    const idx = (y * 320 + x) * 4;
-                    const r = pixels[idx];
-                    const g = pixels[idx + 1];
-                    const b = pixels[idx + 2];
-
-                    // Simple skin tone range
-                    if (r > 95 && g > 40 && b > 20 &&
-                        Math.max(r, g, b) - Math.min(r, g, b) > 15 &&
-                        Math.abs(r - g) > 15 && r > g && r > b) {
-                        totalSkinX += x;
-                        totalSkinY += y;
-                        skinCount++;
-                    }
+            for (let i = 0; i < joints.length; i++) {
+                if (joints[i]) {
+                    jointMeshes[i].position.copy(joints[i]);
+                    jointMeshes[i].visible = true;
                 }
             }
 
-            if (skinCount > 50) {
-                const avgX = totalSkinX / skinCount;
-                const avgY = totalSkinY / skinCount;
-                
-                // Map to 3D world coordinates
-                const worldX = (avgX / 320 - 0.5) * 2.0;
-                const worldY = -(avgY / 240 - 0.5) * 1.5 + 0.5;
-                const worldZ = 0.6;
+            // Highlight index tip and thumb tip
+            if (jointMeshes[4]) {
+                jointMeshes[4].material.opacity = 1.0;
+                jointMeshes[4].scale.setScalar(1.8);
+            }
+            if (jointMeshes[8]) {
+                jointMeshes[8].material.opacity = 1.0;
+                jointMeshes[8].scale.setScalar(1.8);
+            }
 
-                indexFingertip.set(worldX, worldY, worldZ);
-                thumbFingertip.set(worldX + 0.04, worldY - 0.03, worldZ - 0.05);
-                
-                // Detect pinch based on fingertip proximity
-                const pinchDistance = indexFingertip.distanceTo(thumbFingertip);
-                isPinching = pinchDistance < 0.06;
-                
-                document.getElementById('fingertip-count').textContent = '2 / 2';
-                document.getElementById('debug-info').textContent = 
-                    `FINGER: (${worldX.toFixed(2)}, ${worldY.toFixed(2)}) | PINCH: ${isPinching ? 'YES' : 'NO'}`;
+            return { thumbTip, indexTip };
+        }
+
+        // ============================================
+        // HAND TRACKING SETUP
+        // ============================================
+        function setupHandTracking() {
+            xrHands = {
+                left: null,
+                right: null,
+            };
+        }
+
+        function getHandJoints(hand) {
+            if (!hand) return null;
+            const joints = [];
+            for (let i = 0; i < 25; i++) {
+                const joint = hand.getJoint(i);
+                if (joint) {
+                    joints.push(new THREE.Vector3(
+                        joint.position.x,
+                        joint.position.y,
+                        joint.position.z
+                    ));
+                } else {
+                    joints.push(null);
+                }
+            }
+            return joints;
+        }
+
+        // ============================================
+        // MAIN XR LOOP
+        // ============================================
+        function onXRFrame(time, frame) {
+            const session = frame.session;
+            const refSpace = xrReferenceSpace;
+
+            // Get hand data
+            const inputSources = session.inputSources;
+            let leftHand = null;
+            let rightHand = null;
+
+            for (const source of inputSources) {
+                if (source.hand) {
+                    if (source.handedness === 'left') leftHand = source.hand;
+                    if (source.handedness === 'right') rightHand = source.hand;
+                }
+            }
+
+            // Process right hand (primary)
+            const primaryHand = rightHand || leftHand;
+            let thumbTip = null;
+            let indexTip = null;
+
+            if (primaryHand) {
+                const joints = getHandJoints(primaryHand);
+                if (joints) {
+                    const result = updateHandVisuals(0, joints);
+                    thumbTip = result.thumbTip;
+                    indexTip = result.indexTip;
+                }
             } else {
-                document.getElementById('fingertip-count').textContent = '0 / 2';
-                document.getElementById('debug-info').textContent = 'SCANNING FOR HAND...';
+                // Hide hand visuals
+                if (handMeshes[0]) {
+                    handMeshes[0].userData.joints.forEach(j => j.visible = false);
+                }
             }
-        }
 
-        // ============================================
-        // MOUSE/TOUCH FALLBACK CONTROL
-        // ============================================
-        let mouseWorldPos = new THREE.Vector3(0, 0.3, 0.8);
-        let mouseDown = false;
+            // Process second hand
+            const secondaryHand = (rightHand && leftHand) ? leftHand : null;
+            if (secondaryHand) {
+                const joints = getHandJoints(secondaryHand);
+                if (joints) {
+                    updateHandVisuals(1, joints);
+                }
+            } else if (handMeshes[1]) {
+                handMeshes[1].userData.joints.forEach(j => j.visible = false);
+            }
 
-        function setupMouseControl() {
-            const canvas = renderer.domElement;
-            
-            canvas.addEventListener('mousemove', (e) => {
-                const rect = canvas.getBoundingClientRect();
-                const x = ((e.clientX - rect.left) / rect.width) * 2 - 1;
-                const y = -((e.clientY - rect.top) / rect.height) * 2 + 1;
-                
-                mouseWorldPos.set(x * 1.5, y * 1.0 + 0.4, 0.8);
-                indexFingertip.copy(mouseWorldPos);
-                thumbFingertip.set(mouseWorldPos.x + 0.04, mouseWorldPos.y - 0.03, mouseWorldPos.z - 0.05);
-            });
+            // Pinch detection
+            let isPinching = false;
+            if (thumbTip && indexTip) {
+                const pinchDist = thumbTip.distanceTo(indexTip);
+                isPinching = pinchDist < PINCH_THRESHOLD;
+            }
 
-            canvas.addEventListener('mousedown', () => { mouseDown = true; });
-            canvas.addEventListener('mouseup', () => { mouseDown = false; });
+            // Stable pinch debounce
+            if (isPinching) {
+                stablePinchCounter++;
+            } else {
+                stablePinchCounter = 0;
+            }
 
-            // Touch support
-            canvas.addEventListener('touchmove', (e) => {
-                e.preventDefault();
-                const rect = canvas.getBoundingClientRect();
-                const x = ((e.touches[0].clientX - rect.left) / rect.width) * 2 - 1;
-                const y = -((e.touches[0].clientY - rect.top) / rect.height) * 2 + 1;
-                
-                mouseWorldPos.set(x * 1.5, y * 1.0 + 0.4, 0.8);
-                indexFingertip.copy(mouseWorldPos);
-                thumbFingertip.set(mouseWorldPos.x + 0.04, mouseWorldPos.y - 0.03, mouseWorldPos.z - 0.05);
-                
-                if (e.touches.length >= 2) {
-                    isPinching = true;
+            const stablePinch = stablePinchCounter >= STABLE_PINCH_FRAMES;
+            const pinchJustTriggered = stablePinch && !pinchWasDetected;
+            pinchWasDetected = stablePinch;
+
+            // Status update
+            const statusLine = document.getElementById('status-line');
+            if (!primaryHand) {
+                statusLine.textContent = 'SHOW HANDS TO CAMERA';
+                statusLine.classList.add('scanning-text');
+            } else if (isPinching) {
+                statusLine.textContent = 'PINCH DETECTED';
+                statusLine.classList.remove('scanning-text');
+            } else {
+                statusLine.textContent = `BLOCKS: ${blocks.length}`;
+                statusLine.classList.remove('scanning-text');
+            }
+
+            // Handle pinch action
+            if (pinchJustTriggered && indexTip) {
+                const faceResult = findNearestFace(indexTip);
+
+                if (faceResult.block && faceResult.normal) {
+                    extrudeBlock(faceResult.block, faceResult.normal);
                 } else {
-                    isPinching = false;
-                }
-            }, { passive: false });
-
-            canvas.addEventListener('touchstart', (e) => {
-                if (e.touches.length >= 2) isPinching = true;
-            });
-
-            canvas.addEventListener('touchend', () => { isPinching = false; });
-        }
-
-        // ============================================
-        // PLACE BLOCK LOGIC
-        // ============================================
-        function placeBlock(position) {
-            const newBlock = createWireframeBlock(position);
-            scene.add(newBlock);
-            state.blocks.push(newBlock);
-            updateBlockCount();
-            
-            // Brief flash effect
-            const originalOpacity = 0.08;
-            newBlock.children[0].material.opacity = 0.3;
-            setTimeout(() => {
-                if (newBlock.children[0] && newBlock.children[0].material) {
-                    newBlock.children[0].material.opacity = originalOpacity;
-                }
-            }, 200);
-            
-            return newBlock;
-        }
-
-        function updateBlockCount() {
-            document.getElementById('block-count').textContent = state.blocks.length;
-        }
-
-        // ============================================
-        // MAIN UPDATE LOOP
-        // ============================================
-        let prevPinchState = false;
-        let pinchHoldTimer = 0;
-        let lastExtrudeBlock = null;
-        let lastExtrudeFace = null;
-
-        function update() {
-            // Process video for fingertip tracking
-            processVideoFrame();
-
-            // Update fingertip markers
-            const fingerPositions = [indexFingertip, thumbFingertip];
-            for (let i = 0; i < 2; i++) {
-                if (fingerPositions[i]) {
-                    fingertipMarkers[i].position.copy(fingerPositions[i]);
-                    fingertipMarkers[i].visible = true;
-                    fingertipMarkers[i].children[0].visible = true;
-                }
-            }
-            // Hide unused markers
-            for (let i = 2; i < fingertipMarkers.length; i++) {
-                fingertipMarkers[i].visible = false;
-            }
-
-            // Handle pinch gesture
-            const currentPinch = isPinching || mouseDown;
-
-            if (currentPinch && !prevPinchState) {
-                // Pinch started
-                pinchHoldTimer = 0;
-                
-                // Check if near a block face for extrusion
-                const faceResult = findNearestBlockFace(indexFingertip);
-                
-                if (faceResult.block && faceResult.faceNormal) {
-                    // Extrude mode
-                    state.mode = 'extrude';
-                    document.getElementById('mode-panel').querySelector('.panel-value').innerHTML = 
-                        '<span class="indicator-dot"></span>EXTRUDE';
-                    
-                    const newBlock = extrudeBlockFromFace(faceResult.block, faceResult.faceNormal);
-                    lastExtrudeBlock = newBlock;
-                    lastExtrudeFace = faceResult.faceNormal;
-                } else {
-                    // Place mode - place new floating block
-                    state.mode = 'place';
-                    document.getElementById('mode-panel').querySelector('.panel-value').innerHTML = 
-                        '<span class="indicator-dot"></span>PLACE';
-                    
-                    const placePos = indexFingertip.clone();
-                    placePos.y += 0.1; // Slight offset so it appears above fingertip
-                    placeBlock(placePos);
+                    placeBlock(indexTip.clone());
                 }
             }
 
-            if (currentPinch) {
-                pinchHoldTimer += 1;
-            }
-
-            prevPinchState = currentPinch;
-
-            // Update fingertip markers pulse
-            const time = performance.now() * 0.001;
-            fingertipMarkers.forEach((marker, i) => {
-                if (marker.visible) {
-                    const scale = 1 + Math.sin(time * 5 + i) * 0.2;
-                    marker.scale.setScalar(scale);
-                    marker.material.opacity = 0.5 + Math.sin(time * 5 + i) * 0.3;
-                }
-            });
-
-            // Render
             renderer.render(scene, camera);
-            requestAnimationFrame(update);
         }
 
         // ============================================
-        // INITIALIZATION
+        // START AR SESSION
         // ============================================
-        async function init() {
-            document.getElementById('btn-start').addEventListener('click', async () => {
-                document.getElementById('permission-overlay').style.display = 'none';
-                
-                const cameraReady = await setupCamera();
-                if (cameraReady) {
-                    setupVideoProcessing();
-                } else {
-                    // Fallback: use mouse-only control
-                    document.getElementById('debug-info').textContent = 
-                        'CAMERA UNAVAILABLE - USING MOUSE CONTROL';
+        async function startARSession() {
+            if (!navigator.xr) {
+                alert('WebXR not supported on this device/browser.');
+                return;
+            }
+
+            const isSupported = await navigator.xr.isSessionSupported('immersive-ar');
+            if (!isSupported) {
+                alert('Immersive AR not supported. Try Chrome on Android with ARCore.');
+                return;
+            }
+
+            const session = await navigator.xr.requestSession('immersive-ar', {
+                requiredFeatures: ['hand-tracking'],
+                optionalFeatures: ['local', 'hit-test'],
+            });
+
+            xrSession = session;
+            xrReferenceSpace = await session.requestReferenceSpace('local');
+
+            renderer.xr.setReferenceSpaceType('local');
+            await renderer.xr.setSession(session);
+
+            // Set up hand tracking
+            setupHandTracking();
+            setupHandVisuals();
+
+            // Maintain camera aspect ratio
+            session.addEventListener('end', () => {
+                xrSession = null;
+                document.getElementById('status-line').textContent = 'SESSION ENDED';
+                document.getElementById('start-overlay').style.display = 'flex';
+                document.getElementById('btn-start').disabled = false;
+                document.getElementById('btn-start').textContent = 'ENTER AR';
+            });
+
+            // Use the XR frame loop
+            renderer.setAnimationLoop((time, frame) => {
+                if (frame) {
+                    onXRFrame(time, frame);
                 }
-                
-                setupMouseControl();
-                
-                // Place initial reference block
-                const initialBlock = createWireframeBlock(new THREE.Vector3(0, 0.3, 0.8));
-                scene.add(initialBlock);
-                state.blocks.push(initialBlock);
-                updateBlockCount();
-                
-                // Start update loop
-                requestAnimationFrame(update);
+            });
+
+            // Hide overlay
+            document.getElementById('start-overlay').style.display = 'none';
+            document.getElementById('status-line').textContent = 'SHOW HANDS TO CAMERA';
+        }
+
+        // ============================================
+        // INIT
+        // ============================================
+        function init() {
+            setupThreeJS();
+
+            document.getElementById('btn-start').addEventListener('click', async () => {
+                const btn = document.getElementById('btn-start');
+                btn.disabled = true;
+                btn.textContent = 'STARTING...';
+                await startARSession();
+            });
+
+            // Handle resize - maintain aspect ratio
+            window.addEventListener('resize', () => {
+                if (renderer) {
+                    renderer.setSize(window.innerWidth, window.innerHeight);
+                }
             });
         }
 
-        // Handle resize
-        window.addEventListener('resize', () => {
-            camera.aspect = window.innerWidth / window.innerHeight;
-            camera.updateProjectionMatrix();
-            renderer.setSize(window.innerWidth, window.innerHeight);
-        });
-
-        // Handle cleanup
-        window.addEventListener('beforeunload', () => {
-            if (state.cameraStream) {
-                state.cameraStream.getTracks().forEach(track => track.stop());
-            }
-        });
-
-        // Start
         init();
-
-        console.log('AR BLOCK BUILDER - WIREFRAME');
-        console.log('Controls: Pinch to place | Hold near block face to extrude');
-        console.log('Mouse: Click to place | Hold near block face to pull/extrude');
+        console.log('AR BLOCK BUILDER - WebXR Hand Tracking');
+        console.log('Show hands to camera. Pinch index+thumb to place or extrude blocks.');
     </script>
 </body>
 </html>
